@@ -21,7 +21,7 @@
   /* ------------------------------------------------------------ DOM 简写 */
   function $(id) { return document.getElementById(id); }
 
-  var store, host;
+  var store, host, reminderService, notificationAdapter;
   var els = {};
   var undoTimer = null;
   var flashTimer = null;
@@ -35,6 +35,26 @@
 
     store = new App.Store().init();
     host = new App.Host().init();
+    notificationAdapter = App.notifications.create({
+      host: host,
+      webNotification: global.Notification,
+      flash: flash,
+      audio: function () {
+        try {
+          var Ctx = global.AudioContext || global.webkitAudioContext;
+          if (!Ctx) return;
+          var ctx = new Ctx(), oscillator = ctx.createOscillator();
+          oscillator.connect(ctx.destination);
+          oscillator.frequency.value = 720;
+          oscillator.start();
+          oscillator.stop(ctx.currentTime + 0.12);
+        } catch (e) { /* 页面提示仍然有效 */ }
+      }
+    });
+    reminderService = App.reminders.create({
+      notify: function (batch) { notificationAdapter.notify(batch); },
+      markReminded: function (id) { store.markReminded(id); }
+    });
 
     if (App.backups && store.loadStatus !== 'reset') {
       var backupResult = App.backups.defaultService.createDaily(store.state);
@@ -85,7 +105,7 @@
       'flash', 'drawer', 'drawerClose', 'drawerOverlay',
       'dtTitle', 'dtNote', 'dtDue', 'dtPriority', 'dtTags', 'dtRemind', 'dtMeta',
       'dtDelete', 'dtCancel', 'dtSave',
-      'settingsDrawer', 'settingsClose', 'stTheme', 'stDefaultFilter', 'stWeekStart',
+      'settingsDrawer', 'settingsClose', 'stTheme', 'stDefaultFilter', 'stWeekStart', 'stRemindAdvance',
       'stFloating', 'stLayer', 'layerHint', 'stSelectable', 'stHotkeySelectable',
       'stAutoStart', 'stStartMinimized', 'stHotkey',
       'stMultiSelect', 'stRubberBand', 'stKeepSelection',
@@ -575,6 +595,9 @@
     });
     els.stWeekStart.addEventListener('change', function () {
       store.setSettings({ weekStartsOn: parseInt(els.stWeekStart.value, 10) }, true);
+    });
+    els.stRemindAdvance.addEventListener('change', function () {
+      store.setSettings({ remindAdvanceMinutes: parseInt(els.stRemindAdvance.value, 10) }, true);
     });
     els.stFloating.addEventListener('change', function () {
       var mode = els.stFloating.checked ? 'floating' : 'normal';
@@ -1114,6 +1137,7 @@
     els.stTheme.value = s.theme;
     els.stDefaultFilter.value = s.defaultFilter;
     els.stWeekStart.value = String(s.weekStartsOn);
+    els.stRemindAdvance.value = String(s.remindAdvanceMinutes || 0);
     els.stFloating.checked = s.windowMode === 'floating';
     els.stSelectable.checked = s.selectable;
     els.stAutoStart.checked = s.autoStart;
@@ -1535,28 +1559,7 @@
   }
 
   function checkReminders(isStartup) {
-    var now = Date.now();
-    var advance = (store.getSettings().remindAdvanceMinutes || 0) * 60000;
-    var due = [];
-
-    store.allTasks().forEach(function (t) {
-      if (t.status === 'done' || !t.remind || !t.dueAt || t.remindedAt) return;
-      if (new Date(t.dueAt).getTime() - advance <= now) due.push(t);
-    });
-
-    if (!due.length) return;
-
-    // 启动时批量补提醒只汇总一条，避免通知轰炸（FR-32）
-    if (isStartup && due.length > 1) {
-      flash('有 ' + due.length + ' 项任务已到期或逾期', 'error', 8000);
-      notifySystem('待办清单', '有 ' + due.length + ' 项任务已到期或逾期');
-    } else {
-      due.slice(0, 1).forEach(function (t) {
-        flash('提醒：' + t.title, 'error', 8000);
-        notifySystem('待办提醒', t.title);
-      });
-    }
-    due.forEach(function (t) { store.markReminded(t.id); });
+    reminderService.tick(store.allTasks(), store.getSettings(), isStartup);
   }
 
   function notifySystem(title, body) {

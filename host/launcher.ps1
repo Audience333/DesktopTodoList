@@ -419,6 +419,13 @@ function Invoke-PageCommand {
         Update-TrayTooltip -Tooltip $tip
       }
     }
+    'notify' {
+      if ($p) {
+        $title = if ($p.title) { [string]$p.title } else { '待办提醒' }
+        $body = if ($p.body) { [string]$p.body } else { '有任务需要处理' }
+        Show-TrayBalloon -Title $title -Text $body
+      }
+    }
     'minimize' { Minimize-Window -Hwnd $script:Hwnd }
     'hide'     { Hide-MainWindow }
     'show'     { Show-MainWindow }

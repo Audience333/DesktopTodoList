@@ -150,6 +150,7 @@
     updateTask: function (id, patch) {
       var t = this.getTask(id);
       if (!t) return false;
+      var scheduleBefore = { dueAt: t.dueAt, remind: t.remind, remindedAt: t.remindedAt };
 
       this.pushUndo('编辑任务：' + t.title, [id]);
 
@@ -165,6 +166,7 @@
       clean.id = t.id;                 // sanitize 可能改 id（冲突时），此处强制保留
       clean.createdAt = t.createdAt;
       clean.updatedAt = new Date().toISOString();
+      if (App.reminders) clean = App.reminders.create({}).resetIfScheduleChanged(scheduleBefore, clean);
       if (patch.status === undefined && clean.status === 'done' && !t.completedAt) {
         clean.completedAt = new Date().toISOString();
       }
