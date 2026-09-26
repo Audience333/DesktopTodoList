@@ -36,6 +36,11 @@
     store = new App.Store().init();
     host = new App.Host().init();
 
+    if (App.backups && store.loadStatus !== 'reset') {
+      var backupResult = App.backups.defaultService.createDaily(store.state);
+      if (!backupResult.ok && global.console) console.warn(backupResult.error);
+    }
+
     applyTheme();
     store.subscribe(render);
     host.onUpdate(onHostUpdate);
@@ -1137,8 +1142,10 @@
     var n = store.allTasks().length;
     var bytes = 0;
     try { bytes = (global.localStorage.getItem(S.KEY) || '').length; } catch (e) { bytes = 0; }
+    var backupList = App.backups ? App.backups.defaultService.list() : [];
+    var backupText = backupList.length ? backupList.length + ' 份，最新 ' + backupList[0].date : (S.hasBackup() ? '旧版备份' : '无');
     els.stDataHint.textContent = '共 ' + n + ' 项任务，占用约 ' +
-      (bytes / 1024).toFixed(1) + ' KB。备份：' + (S.hasBackup() ? '有' : '无');
+      (bytes / 1024).toFixed(1) + ' KB。备份：' + backupText;
   }
 
   function updateAbout() {
@@ -1225,7 +1232,8 @@
 
   function restoreBackup() {
     if (!S.hasBackup()) { flash('没有可用的自动备份', 'error'); return; }
-    var st = S.readBackup();
+    var backup = App.backups ? App.backups.defaultService.latestValid() : null;
+    var st = backup ? backup.state : S.readBackup();
     if (!st || !st.tasks.length) { flash('备份内容为空或已损坏', 'error'); return; }
     askConfirm('从备份恢复', '备份包含 ' + st.tasks.length + ' 项任务，将覆盖当前数据。是否继续？', function () {
       store.importState(st, false);
