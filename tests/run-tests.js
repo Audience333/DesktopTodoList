@@ -59,7 +59,7 @@ function makeLocalStorage(initial) {
   };
 }
 
-/** 加载 storage.js + store.js 到隔离沙箱 */
+/** 加载持久化适配器 + store.js 到隔离沙箱 */
 function createApp(seed) {
   const localStorage = makeLocalStorage(seed);
   const sandbox = {
@@ -89,7 +89,7 @@ function createApp(seed) {
   sandbox.window = sandbox;
   vm.createContext(sandbox);
 
-  for (const f of ['src/js/storage.js', 'src/js/store.js']) {
+  for (const f of ['src/js/storage.js', 'src/js/services/persistence.js', 'src/js/store.js']) {
     const code = fs.readFileSync(path.join(ROOT, f), 'utf8');
     vm.runInContext(code, sandbox, { filename: f });
   }
