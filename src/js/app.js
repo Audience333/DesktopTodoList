@@ -90,7 +90,7 @@
       'stAutoStart', 'stStartMinimized', 'stHotkey',
       'stMultiSelect', 'stRubberBand', 'stKeepSelection',
       'stExport', 'stImport', 'stImportFile', 'stRestoreBackup', 'stReset', 'stDataHint',
-      'aboutText', 'confirmBox', 'confirmTitle', 'confirmMsg', 'confirmCancel', 'confirmOk'
+      'aboutText', 'confirmBox', 'confirmTitle', 'confirmMsg', 'confirmCancel', 'confirmMerge', 'confirmOk'
     ].forEach(function (id) { els[id] = $(id); });
   }
 
@@ -625,6 +625,16 @@
 
     /* ---- 全局快捷键 ---- */
     document.addEventListener('keydown', onGlobalKeydown);
+    document.addEventListener('dragover', function (e) { e.preventDefault(); });
+    document.addEventListener('drop', function (e) {
+      if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
+      e.preventDefault();
+      if (e.dataTransfer.files.length !== 1 || !/\.json$/i.test(e.dataTransfer.files[0].name)) {
+        flash('请拖入单个 JSON 文件', 'error');
+        return;
+      }
+      processImportFile(e.dataTransfer.files[0]);
+    });
 
     /* ---- 窗口拖拽 / 缩放（仅宿主浮窗模式） ---- */
     bindWindowDrag();
@@ -1210,24 +1220,32 @@
   function importData() {
     var file = els.stImportFile.files && els.stImportFile.files[0];
     if (!file) return;
+    processImportFile(file);
+    els.stImportFile.value = '';
+  }
+
+  function processImportFile(file) {
     var reader = new FileReader();
     reader.onload = function () {
-      var res = S.parseImport(String(reader.result));
+      var res = App.importExport.parse(String(reader.result));
       if (!res.ok) {
-        flash('导入失败：' + res.error, 'error', 6000);
-        els.stImportFile.value = '';
+        flash('导入失败：' + res.errors.join('；'), 'error', 6000);
         return;
       }
-      askConfirm('导入任务', '导入 ' + res.state.tasks.length + ' 项任务？\n' +
-                 '确定 = 覆盖本机全部数据；取消 = 放弃导入。', function () {
-        var n = store.importState(res.state, false);
-        flash('已覆盖导入 ' + n + ' 项任务', 'success');
-        closeSettings();
-      });
-      els.stImportFile.value = '';
+      askImport(res);
     };
     reader.onerror = function () { flash('文件读取失败', 'error'); };
     reader.readAsText(file);
+  }
+
+  function applyImport(preview, mode) {
+    var result = App.importExport.commit(preview, mode, store.state);
+    if (!result.ok) { flash('导入失败：' + result.error, 'error', 6000); return; }
+    store.state = result.state;
+    store.clearSelection();
+    store.notify();
+    flash((mode === 'merge' ? '已合并导入 ' : '已覆盖导入 ') + result.count + ' 项任务', 'success');
+    closeSettings();
   }
 
   function restoreBackup() {
@@ -1252,21 +1270,44 @@
   /* -------------------------------------------------------------- 确认框 */
 
   var confirmCb = null;
+  var confirmAltCb = null;
 
   function askConfirm(title, msg, onOk) {
     els.confirmTitle.textContent = title;
     els.confirmMsg.textContent = msg;
     els.confirmBox.hidden = false;
     confirmCb = onOk;
+    confirmAltCb = null;
+    els.confirmMerge.hidden = true;
+    els.confirmOk.textContent = '确定';
     els.confirmOk.focus();
+  }
+
+  function askImport(preview) {
+    els.confirmTitle.textContent = '导入任务';
+    els.confirmMsg.textContent = '共 ' + preview.total + ' 条，' + preview.valid + ' 条有效，' + preview.invalid + ' 条无效，' + preview.duplicates + ' 条重复。请选择合并或覆盖。';
+    els.confirmBox.hidden = false;
+    els.confirmMerge.hidden = false;
+    els.confirmOk.textContent = '覆盖';
+    confirmAltCb = function () { applyImport(preview, 'merge'); };
+    confirmCb = function () { applyImport(preview, 'replace'); };
+    els.confirmMerge.focus();
   }
 
   function hideConfirm() {
     els.confirmBox.hidden = true;
     confirmCb = null;
+    confirmAltCb = null;
+    els.confirmMerge.hidden = true;
+    els.confirmOk.textContent = '确定';
   }
 
   function bindConfirm() {
+    els.confirmMerge.addEventListener('click', function () {
+      var cb = confirmAltCb;
+      hideConfirm();
+      if (cb) cb();
+    });
     els.confirmOk.addEventListener('click', function () {
       var cb = confirmCb;
       hideConfirm();
