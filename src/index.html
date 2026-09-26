@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- 窗口标题被 PowerShell 宿主用于定位 HWND，请勿随意更改（见需求文档 §11.4） -->
+<title>待办清单</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body class="mode-normal">
+
+<!-- ===================== 标题栏 / 拖拽区 ===================== -->
+<header class="titlebar" id="titlebar">
+  <div class="titlebar__drag" id="dragRegion" title="按住拖动窗口">
+    <span class="app-logo" aria-hidden="true">✓</span>
+    <span class="app-title">待办清单</span>
+    <span class="app-badge" id="overdueBadge" hidden></span>
+  </div>
+
+  <div class="titlebar__actions">
+    <button class="icon-btn" id="btnSearch" type="button" aria-label="搜索" title="搜索 (Ctrl+F)">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2L14 14"/></svg>
+    </button>
+    <button class="icon-btn" id="btnLayerTop" type="button" aria-pressed="false"
+            aria-label="窗口置顶" title="置顶 / 取消置顶">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2l3 4H5l3-4z"/><rect x="7.2" y="6" width="1.6" height="8" rx=".8"/></svg>
+    </button>
+    <button class="icon-btn" id="btnLayerBottom" type="button" aria-pressed="false"
+            aria-label="窗口置底" title="置底 / 取消置底">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 14l3-4H5l3 4z"/><rect x="7.2" y="2" width="1.6" height="8" rx=".8"/></svg>
+    </button>
+    <button class="icon-btn" id="btnSelectable" type="button" aria-pressed="true"
+            aria-label="窗口可选中" title="可选中 / 不可选中（鼠标穿透）">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8s2.6-4 6.5-4 6.5 4 6.5 4-2.6 4-6.5 4S1.5 8 1.5 8z"/><circle cx="8" cy="8" r="1.8"/></svg>
+      <span class="strike" aria-hidden="true"></span>
+    </button>
+    <button class="icon-btn" id="btnSettings" type="button" aria-label="设置" title="设置">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.6l1 1.7 2-.3.4 2 1.8.9-1 1.9 1 1.9-1.8.9-.4 2-2-.3-1 1.7-1-1.7-2 .3-.4-2L2.8 11l1-1.9-1-1.9 1.8-.9.4-2 2 .3z"/></svg>
+    </button>
+    <span class="titlebar__sep" aria-hidden="true"></span>
+    <button class="icon-btn" id="btnMinimize" type="button" aria-label="收起" title="收起">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7.2" width="10" height="1.6" rx=".8"/></svg>
+    </button>
+    <button class="icon-btn icon-btn--close" id="btnClose" type="button" aria-label="关闭" title="关闭">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+    </button>
+  </div>
+</header>
+
+<!-- ===================== 穿透提示条（FR-77） ===================== -->
+<div class="passthrough-banner" id="passthroughBanner" hidden role="status">
+  <span class="pb-icon" aria-hidden="true">👁</span>
+  <span class="pb-text">
+    当前<strong>不可选中</strong>，鼠标已穿透 · 按 <kbd id="pbHotkey">Ctrl+Alt+L</kbd> 或使用托盘菜单恢复
+  </span>
+</div>
+
+<!-- ===================== 纯浏览器模式提示 ===================== -->
+<div class="degrade-banner" id="degradeBanner" hidden>
+  <span>浏览器模式：浮窗、置顶置底、穿透、开机自启不可用。请用 <code>启动待办.bat</code> 启动桌面版。</span>
+  <button type="button" class="link-btn" id="degradeClose">知道了</button>
+</div>
+
+<!-- ===================== 快速录入 ===================== -->
+<section class="quickadd">
+  <button class="quickadd__plus" id="btnQuickAdd" type="button" aria-label="添加任务">＋</button>
+  <input class="quickadd__input" id="taskInput" type="text" maxlength="200"
+         placeholder="添加任务，回车保存…" autocomplete="off" aria-label="新任务标题">
+  <button class="quickadd__detail" id="btnDetailAdd" type="button" title="添加并设置详情">详情</button>
+</section>
+
+<!-- 录入草稿面板：截止时间 / 优先级 / 标签 -->
+<section class="draft-panel" id="draftPanel" hidden>
+  <div class="field-row">
+    <label class="field">
+      <span class="field__label">截止时间</span>
+      <input type="datetime-local" id="draftDue" class="field__input">
+    </label>
+    <label class="field">
+      <span class="field__label">优先级</span>
+      <select id="draftPriority" class="field__input">
+        <option value="high">高</option>
+        <option value="medium" selected>中</option>
+        <option value="low">低</option>
+      </select>
+    </label>
+  </div>
+  <div class="field-row">
+    <label class="field">
+      <span class="field__label">标签</span>
+      <input type="text" id="draftTags" class="field__input" placeholder="用逗号分隔，最多 5 个">
+    </label>
+    <label class="check">
+      <input type="checkbox" id="draftRemind" checked>
+      <span>到点提醒</span>
+    </label>
+  </div>
+  <div class="draft-panel__actions">
+    <button type="button" class="btn" id="draftCancel">取消</button>
+    <button type="button" class="btn btn--primary" id="draftConfirm">添加任务</button>
+  </div>
+</section>
+
+<!-- ===================== 搜索行 ===================== -->
+<section class="searchbar" id="searchbar" hidden>
+  <input type="search" id="searchInput" class="searchbar__input" placeholder="搜索标题、备注、标签…" autocomplete="off">
+  <button type="button" class="icon-btn" id="searchClear" aria-label="清空搜索">✕</button>
+</section>
+
+<!-- ===================== 视图切换 ===================== -->
+<nav class="views" role="tablist" aria-label="任务视图">
+  <button class="view-tab" data-filter="today" role="tab" type="button">今天<span class="tab-count" data-count="today">0</span></button>
+  <button class="view-tab" data-filter="week"  role="tab" type="button">本周<span class="tab-count" data-count="week">0</span></button>
+  <button class="view-tab" data-filter="all"   role="tab" type="button">全部<span class="tab-count" data-count="all">0</span></button>
+  <button class="view-tab" data-filter="done"  role="tab" type="button">已完成<span class="tab-count" data-count="done">0</span></button>
+</nav>
+
+<!-- ===================== 批量工具栏（FR-87） ===================== -->
+<div class="bulkbar" id="bulkbar" hidden role="toolbar" aria-label="批量操作">
+  <span class="bulkbar__count" id="bulkCount">已选 0 项</span>
+  <span class="bulkbar__hint" id="bulkHiddenHint" hidden></span>
+  <span class="bulkbar__spacer"></span>
+  <button type="button" class="bulk-btn" id="bulkDone"     title="标记完成">✓ 完成</button>
+  <button type="button" class="bulk-btn" id="bulkUndone"   title="恢复为待办">↺ 待办</button>
+  <button type="button" class="bulk-btn" id="bulkPrio"     title="设置优先级">⚑ 优先级</button>
+  <button type="button" class="bulk-btn bulk-btn--danger" id="bulkDelete" title="删除">🗑 删除</button>
+  <button type="button" class="bulk-btn" id="bulkClear"    title="取消选择">✕</button>
+</div>
+
+<!-- ===================== 列表 ===================== -->
+<main class="list-wrap" id="listWrap">
+  <div class="list-head" id="listHead" hidden>
+    <label class="check check--head" title="全选当前视图 (Ctrl+A)">
+      <input type="checkbox" id="selectAllBox">
+      <span class="check__mark"></span>
+    </label>
+    <span class="list-head__label" id="listHeadLabel"></span>
+  </div>
+
+  <ul class="task-list" id="taskList" role="listbox" aria-multiselectable="true"></ul>
+
+  <div class="empty" id="emptyState" hidden>
+    <div class="empty__icon" aria-hidden="true">📝</div>
+    <p class="empty__title" id="emptyTitle">暂无任务</p>
+    <p class="empty__desc" id="emptyDesc">在上方输入框写下第一件事，按回车即可添加。</p>
+  </div>
+
+  <!-- 框选矩形 -->
+  <div class="rubber-band" id="rubberBand" hidden aria-hidden="true"></div>
+</main>
+
+<!-- ===================== 底部状态栏 ===================== -->
+<footer class="statusbar">
+  <span class="statusbar__text" id="statusText">0 项待办</span>
+  <span class="statusbar__spacer"></span>
+  <button type="button" class="link-btn" id="btnClearCompleted" hidden>清理已完成</button>
+  <span class="statusbar__meta" id="statusMeta">浏览器模式</span>
+</footer>
+
+<!-- 浮窗缩放热区 -->
+<div class="resize-grip" id="resizeGrip" hidden title="拖动调整窗口大小"></div>
+
+<!-- ===================== 撤销提示 ===================== -->
+<div class="toast" id="toast" hidden role="status" aria-live="polite">
+  <span class="toast__text" id="toastText"></span>
+  <button type="button" class="toast__action" id="toastAction">撤销</button>
+  <div class="toast__progress" id="toastProgress"></div>
+</div>
+
+<!-- 顶部居中提示（导入结果、错误等，无操作按钮） -->
+<div class="flash" id="flash" hidden role="alert"></div>
+
+<!-- ===================== 任务详情面板 ===================== -->
+<section class="drawer" id="drawer" hidden aria-label="任务详情">
+  <header class="drawer__head">
+    <h2 class="drawer__title">任务详情</h2>
+    <button type="button" class="icon-btn" id="drawerClose" aria-label="关闭">✕</button>
+  </header>
+  <div class="drawer__body">
+    <label class="field field--block">
+      <span class="field__label">标题</span>
+      <input type="text" id="dtTitle" class="field__input" maxlength="200">
+    </label>
+    <label class="field field--block">
+      <span class="field__label">备注</span>
+      <textarea id="dtNote" class="field__input" rows="3" maxlength="2000" placeholder="补充说明…"></textarea>
+    </label>
+    <div class="field-row">
+      <label class="field">
+        <span class="field__label">截止时间</span>
+        <input type="datetime-local" id="dtDue" class="field__input">
+      </label>
+      <label class="field">
+        <span class="field__label">优先级</span>
+        <select id="dtPriority" class="field__input">
+          <option value="high">高</option>
+          <option value="medium">中</option>
+          <option value="low">低</option>
+        </select>
+      </label>
+    </div>
+    <div class="field-row">
+      <label class="field">
+        <span class="field__label">标签</span>
+        <input type="text" id="dtTags" class="field__input" placeholder="用逗号分隔">
+      </label>
+      <label class="check">
+        <input type="checkbox" id="dtRemind">
+        <span>到点提醒</span>
+      </label>
+    </div>
+    <p class="drawer__meta" id="dtMeta"></p>
+  </div>
+  <footer class="drawer__foot">
+    <button type="button" class="btn btn--danger" id="dtDelete">删除</button>
+    <span class="drawer__spacer"></span>
+    <button type="button" class="btn" id="dtCancel">取消</button>
+    <button type="button" class="btn btn--primary" id="dtSave">保存</button>
+  </footer>
+</section>
+<div class="overlay" id="drawerOverlay" hidden></div>
+
+<!-- ===================== 设置面板 ===================== -->
+<section class="drawer drawer--settings" id="settingsDrawer" hidden aria-label="设置">
+  <header class="drawer__head">
+    <h2 class="drawer__title">设置</h2>
+    <button type="button" class="icon-btn" id="settingsClose" aria-label="关闭">✕</button>
+  </header>
+  <div class="drawer__body">
+
+    <fieldset class="group">
+      <legend>外观</legend>
+      <label class="field field--block">
+        <span class="field__label">主题</span>
+        <select id="stTheme" class="field__input">
+          <option value="system">跟随系统</option>
+          <option value="light">浅色</option>
+          <option value="dark">深色</option>
+        </select>
+      </label>
+      <label class="field field--block">
+        <span class="field__label">启动默认视图</span>
+        <select id="stDefaultFilter" class="field__input">
+          <option value="today">今天</option>
+          <option value="week">本周</option>
+          <option value="all">全部</option>
+          <option value="done">已完成</option>
+        </select>
+      </label>
+      <label class="field field--block">
+        <span class="field__label">每周起始日</span>
+        <select id="stWeekStart" class="field__input">
+          <option value="1">周一</option>
+          <option value="0">周日</option>
+        </select>
+      </label>
+    </fieldset>
+
+    <fieldset class="group">
+      <legend>窗口</legend>
+      <label class="switch">
+        <input type="checkbox" id="stFloating">
+        <span class="switch__track"><span class="switch__thumb"></span></span>
+        <span class="switch__label">浮窗模式<small>无边框紧凑窗口，关闭时收起到托盘</small></span>
+      </label>
+      <div class="field field--block">
+        <span class="field__label">窗口层级</span>
+        <div class="segmented" id="stLayer" role="radiogroup" aria-label="窗口层级">
+          <button type="button" data-layer="top"    role="radio" aria-checked="false">置顶</button>
+          <button type="button" data-layer="normal" role="radio" aria-checked="true">普通</button>
+          <button type="button" data-layer="bottom" role="radio" aria-checked="false">置底</button>
+        </div>
+        <p class="field__hint" id="layerHint"></p>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="stSelectable" checked>
+        <span class="switch__track"><span class="switch__thumb"></span></span>
+        <span class="switch__label">可选中<small>关闭后鼠标穿透，窗口只读不响应点击</small></span>
+      </label>
+      <p class="field__hint danger-hint">关闭「可选中」后无法再用鼠标点回本窗口，请按
+        <kbd id="stHotkeySelectable">Ctrl+Alt+L</kbd> 或使用托盘菜单「允许交互」恢复。</p>
+    </fieldset>
+
+    <fieldset class="group">
+      <legend>启动与常驻</legend>
+      <label class="switch">
+        <input type="checkbox" id="stAutoStart">
+        <span class="switch__track"><span class="switch__thumb"></span></span>
+        <span class="switch__label">开机自启<small>写入当前用户注册表 Run 项，无需管理员权限</small></span>
+      </label>
+      <label class="switch">
+        <input type="checkbox" id="stStartMinimized">
+        <span class="switch__track"><span class="switch__thumb"></span></span>
+        <span class="switch__label">自启时最小化<small>开机后静默运行在托盘，不弹出窗口</small></span>
+      </label>
+      <label class="field field--block">
+        <span class="field__label">显示/隐藏窗口</span>
+        <input type="text" id="stHotkey" class="field__input" readonly>
+      </label>
+    </fieldset>
+
+    <fieldset class="group">
+      <legend>列表选择</legend>
+      <label class="switch">
+        <input type="checkbox" id="stMultiSelect">
+        <span class="switch__track"><span class="switch__thumb"></span></span>
+        <span class="switch__label">启用多选<small>Ctrl 追加、Shift 连选、Ctrl+A 全选</small></span>
+      </label>
+      <label class="switch">
+        <input type="checkbox" id="stRubberBand">
+        <span class="switch__track"><span class="switch__thumb"></span></span>
+        <span class="switch__label">启用框选<small>在列表空白处拖拽划出矩形选择</small></span>
+      </label>
+      <label class="switch">
+        <input type="checkbox" id="stKeepSelection">
+        <span class="switch__track"><span class="switch__thumb"></span></span>
+        <span class="switch__label">跨视图保留选择<small>切换视图后保留不在当前视图中的选中项</small></span>
+      </label>
+    </fieldset>
+
+    <fieldset class="group">
+      <legend>数据</legend>
+      <div class="btn-row">
+        <button type="button" class="btn" id="stExport">导出 JSON</button>
+        <button type="button" class="btn" id="stImport">导入 JSON</button>
+      </div>
+      <input type="file" id="stImportFile" accept=".json,application/json" hidden>
+      <div class="btn-row">
+        <button type="button" class="btn" id="stRestoreBackup">从备份恢复</button>
+        <button type="button" class="btn btn--danger" id="stReset">清空全部数据</button>
+      </div>
+      <p class="field__hint" id="stDataHint"></p>
+    </fieldset>
+
+    <p class="about" id="aboutText"></p>
+  </div>
+</section>
+
+<!-- ===================== 确认对话框 ===================== -->
+<div class="confirm" id="confirmBox" hidden role="dialog" aria-modal="true">
+  <div class="confirm__panel">
+    <h3 class="confirm__title" id="confirmTitle">确认操作</h3>
+    <p class="confirm__msg" id="confirmMsg"></p>
+    <div class="confirm__actions">
+      <button type="button" class="btn" id="confirmCancel">取消</button>
+      <button type="button" class="btn btn--danger" id="confirmOk">确定</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/storage.js"></script>
+<script src="js/store.js"></script>
+<script src="js/host.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
