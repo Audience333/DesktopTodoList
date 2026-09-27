@@ -30,15 +30,26 @@ StateRepository::StateRepository(
 
 LoadResult StateRepository::load() {
     const auto source = directory_ / L"state.json";
-    if (!files_.exists(source)) return {};
+    const auto source_exists = files_.exists(source);
+    std::vector<ValidationIssue> source_issues;
+    std::filesystem::path preserved_source;
+    if (source_exists) {
+        const auto bytes = files_.read(source);
+        if (bytes.ok()) {
+            auto decoded = decode_state_utf8(bytes.bytes);
+            if (decoded.state.has_value()) {
+                const auto status = decoded.issues.empty() ? LoadStatus::ok : LoadStatus::repaired;
+                return {std::move(*decoded.state), status, {}, std::move(decoded.issues), {}};
+            }
+            source_issues = std::move(decoded.issues);
+        }
 
-    const auto bytes = files_.read(source);
-    if (bytes.ok()) {
-        auto decoded = decode_state_utf8(bytes.bytes);
-        if (decoded.state.has_value()) return {std::move(*decoded.state), LoadStatus::ok, {}};
+        const auto preserved = preserve_corrupt_source();
+        if (!preserved.ok) {
+            return {{}, LoadStatus::reset, preserved.error, std::move(source_issues), {}};
+        }
+        preserved_source = preserved.path;
     }
-
-    const auto preserved = preserve_corrupt_source();
     auto backups = files_.list(directory_ / L"backups");
     std::erase_if(backups, [](const auto& path) { return !is_backup(path); });
     std::sort(backups.rbegin(), backups.rend());
@@ -50,10 +61,13 @@ LoadResult StateRepository::load() {
             auto restored = std::move(*decoded.state);
             const auto saved = save(restored);
             return {std::move(restored), LoadStatus::restored,
-                saved.ok ? std::wstring{} : saved.error};
+                saved.ok ? std::wstring{} : saved.error,
+                std::move(decoded.issues), std::move(preserved_source)};
         }
     }
-    return {{}, LoadStatus::reset, preserved.ok ? L"No valid state or backup" : preserved.error};
+    if (!source_exists && backups.empty()) return {};
+    return {{}, LoadStatus::reset, L"No valid state or backup",
+        std::move(source_issues), std::move(preserved_source)};
 }
 
 SaveResult StateRepository::save_to(
@@ -95,6 +109,12 @@ BackupResult StateRepository::ensure_daily_backup(const AppState& state, LocalDa
 BackupResult StateRepository::create_reset_backup(const AppState& state) {
     return save_to(
         directory_ / L"backups" / (L"pre-reset-" + timestamp_() + L".json"),
+        state);
+}
+
+BackupResult StateRepository::create_import_backup(const AppState& state) {
+    return save_to(
+        directory_ / L"backups" / (L"pre-import-" + timestamp_() + L".json"),
         state);
 }
 

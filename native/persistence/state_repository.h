@@ -13,14 +13,17 @@ struct LocalDate {
     int year;
     int month;
     int day;
+    bool operator==(const LocalDate&) const = default;
 };
 
-enum class LoadStatus { fresh, ok, restored, reset };
+enum class LoadStatus { fresh, ok, repaired, restored, reset };
 
 struct LoadResult {
     AppState state;
     LoadStatus status = LoadStatus::fresh;
     std::wstring error;
+    std::vector<ValidationIssue> issues;
+    std::filesystem::path preserved_source;
 };
 
 struct SaveResult {
@@ -47,6 +50,7 @@ public:
     [[nodiscard]] SaveResult save(const AppState& state);
     [[nodiscard]] BackupResult ensure_daily_backup(const AppState& state, LocalDate today);
     [[nodiscard]] BackupResult create_reset_backup(const AppState& state);
+    [[nodiscard]] BackupResult create_import_backup(const AppState& state);
     [[nodiscard]] ExportResult preserve_corrupt_source();
     [[nodiscard]] ExportResult export_to(
         const std::filesystem::path& destination,

@@ -10,11 +10,11 @@ ImportResult prepare_import(
     ImportMode mode) {
     auto decoded = decode_state_utf8(source);
     if (!decoded.state.has_value()) {
-        return {std::nullopt, std::move(decoded.issues), std::move(decoded.error), 0};
+        return {std::nullopt, std::move(decoded.issues), std::move(decoded.error), 0, mode};
     }
     if (mode == ImportMode::replace) {
         const auto count = decoded.state->tasks.size();
-        return {std::move(decoded.state), std::move(decoded.issues), {}, count};
+        return {std::move(decoded.state), std::move(decoded.issues), {}, count, mode};
     }
 
     AppState candidate = current;
@@ -31,7 +31,7 @@ ImportResult prepare_import(
             *existing = std::move(incoming);
         }
     }
-    return {std::move(candidate), std::move(decoded.issues), {}, added};
+    return {std::move(candidate), std::move(decoded.issues), {}, added, mode};
 }
 
 }  // namespace desktop_todo

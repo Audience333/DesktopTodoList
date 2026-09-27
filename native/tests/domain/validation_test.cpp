@@ -119,3 +119,19 @@ TEST_CASE(validation_unknown_schema_reports_unsupported) {
     EXPECT_TRUE(!result.supported);
     EXPECT_TRUE(!result.issues.empty());
 }
+
+TEST_CASE(validation_tasks_without_ids_are_dropped) {
+    AppState state;
+    auto first = valid_task();
+    auto second = valid_task();
+    first.title = L"first";
+    second.title = L"second";
+    first.id.clear();
+    second.id.clear();
+    state.tasks = {first, second};
+
+    const auto result = desktop_todo::validate_state(state, fixed_now);
+
+    EXPECT_TRUE(result.state.tasks.empty());
+    EXPECT_EQ(result.dropped_tasks, std::size_t{2});
+}

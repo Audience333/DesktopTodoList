@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cwctype>
 #include <unordered_set>
+#include <unordered_map>
 
 namespace desktop_todo {
 namespace {
@@ -115,6 +116,7 @@ TaskValidation validate_task(Task task, double fallback_order, Clock::time_point
     }
     if (task.id.empty()) {
         add_issue(result.issues, ValidationIssueCode::missing_id);
+        return result;
     }
     if (task.created_at == Clock::time_point{}) {
         task.created_at = now;
@@ -179,7 +181,7 @@ StateValidation validate_state(AppState state, Clock::time_point now) {
 
     std::vector<Task> validated_tasks;
     validated_tasks.reserve(result.state.tasks.size());
-    std::unordered_set<std::wstring> ids;
+    std::unordered_map<std::wstring, std::size_t> ids;
     for (std::size_t index = 0; index < result.state.tasks.size(); ++index) {
         auto validated = validate_task(result.state.tasks[index], static_cast<double>(index + 1), now);
         for (auto issue : validated.issues) {
@@ -190,11 +192,16 @@ StateValidation validate_state(AppState state, Clock::time_point now) {
             ++result.dropped_tasks;
             continue;
         }
-        if (!validated.task->id.empty() && !ids.insert(validated.task->id).second) {
+        const auto existing = ids.find(validated.task->id);
+        if (existing != ids.end()) {
             result.issues.push_back({ValidationIssueCode::duplicate_id, index});
+            if (validated.task->updated_at > validated_tasks[existing->second].updated_at) {
+                validated_tasks[existing->second] = std::move(*validated.task);
+            }
             ++result.dropped_tasks;
             continue;
         }
+        ids.emplace(validated.task->id, validated_tasks.size());
         validated_tasks.push_back(std::move(*validated.task));
     }
     result.state.tasks = std::move(validated_tasks);

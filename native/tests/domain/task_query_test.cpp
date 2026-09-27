@@ -191,3 +191,29 @@ TEST_CASE(task_query_dense_orders_compact_to_consecutive_values) {
     EXPECT_EQ(tasks[1].order, 2.0);
     EXPECT_EQ(tasks[2].order, 3.0);
 }
+
+TEST_CASE(task_query_today_uses_supplied_local_utc_offset) {
+    AppState state;
+    state.tasks = {make_task(L"local-today", 1.0, instant(2026, 9, 26, 16, 30))};
+    const auto now = instant(2026, 9, 26, 16, 10);
+
+    const auto result = desktop_todo::query_tasks(
+        state,
+        QuerySpec{.view = ViewKind::today, .utc_offset = std::chrono::hours{8}},
+        now);
+
+    EXPECT_EQ(ids(result), std::vector<std::wstring>{L"local-today"});
+}
+
+TEST_CASE(task_query_compacts_shuffled_dense_orders_by_manual_order) {
+    std::vector<Task> tasks = {
+        make_task(L"third", 3.0),
+        make_task(L"first", 1.0),
+        make_task(L"second", 1.0 + 1e-8)};
+
+    desktop_todo::compact_order(tasks);
+
+    EXPECT_EQ(tasks[0].order, 3.0);
+    EXPECT_EQ(tasks[1].order, 1.0);
+    EXPECT_EQ(tasks[2].order, 2.0);
+}

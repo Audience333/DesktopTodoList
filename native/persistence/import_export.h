@@ -11,6 +11,7 @@ struct ImportResult {
     std::vector<ValidationIssue> issues;
     std::wstring error;
     std::size_t added = 0;
+    ImportMode mode = ImportMode::merge;
 };
 
 [[nodiscard]] ImportResult prepare_import(

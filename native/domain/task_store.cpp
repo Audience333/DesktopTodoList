@@ -1,5 +1,6 @@
 #include "domain/task_store.h"
 
+#include "domain/reminder_engine.h"
 #include "domain/validation.h"
 
 #include <algorithm>
@@ -91,7 +92,7 @@ bool TaskStore::update_task(std::wstring_view id, const TaskPatch& patch) {
     }
 
     save_undo();
-    *found = std::move(*validated.task);
+    *found = reset_reminder_if_schedule_changed(*found, std::move(*validated.task));
     record_change({found->id});
     return true;
 }
@@ -153,29 +154,32 @@ bool TaskStore::reorder(
     std::wstring_view id,
     std::wstring_view target_id,
     DropPosition position) {
-    const auto source = find_task(id);
-    const auto target = find_task(target_id);
-    if (source == state_.tasks.end() || target == state_.tasks.end() || source == target) {
+    if (id == target_id || find_task(id) == state_.tasks.end() ||
+        find_task(target_id) == state_.tasks.end()) {
         return false;
     }
 
     save_undo();
-    Task moved = std::move(*source);
-    const auto target_index = static_cast<std::size_t>(target - state_.tasks.begin());
-    const auto source_index = static_cast<std::size_t>(source - state_.tasks.begin());
-    state_.tasks.erase(state_.tasks.begin() + static_cast<std::ptrdiff_t>(source_index));
-
-    auto insertion_index = target_index;
-    if (source_index < target_index) {
-        --insertion_index;
-    }
-    if (position == DropPosition::after) {
-        ++insertion_index;
-    }
-    state_.tasks.insert(
-        state_.tasks.begin() + static_cast<std::ptrdiff_t>(insertion_index), std::move(moved));
-    for (std::size_t index = 0; index < state_.tasks.size(); ++index) {
-        state_.tasks[index].order = static_cast<double>(index + 1);
+    std::vector<Task*> ordered;
+    ordered.reserve(state_.tasks.size());
+    for (auto& task : state_.tasks) ordered.push_back(&task);
+    std::stable_sort(ordered.begin(), ordered.end(), [](const Task* left, const Task* right) {
+        if (left->order != right->order) return left->order < right->order;
+        return left->id < right->id;
+    });
+    const auto source = std::find_if(ordered.begin(), ordered.end(), [id](const Task* task) {
+        return task->id == id;
+    });
+    auto moved = *source;
+    ordered.erase(source);
+    const auto target = std::find_if(ordered.begin(), ordered.end(), [target_id](const Task* task) {
+        return task->id == target_id;
+    });
+    auto insertion = target;
+    if (position == DropPosition::after) ++insertion;
+    ordered.insert(insertion, moved);
+    for (std::size_t index = 0; index < ordered.size(); ++index) {
+        ordered[index]->order = static_cast<double>(index + 1);
     }
     record_change(task_ids(state_));
     return true;
@@ -216,7 +220,19 @@ bool TaskStore::undo() {
             affected.push_back(id);
         }
     }
-    state_ = std::move(undo_->state);
+    auto restored = std::move(undo_->state);
+    for (auto& restored_task : restored.tasks) {
+        const auto current = std::find_if(
+            state_.tasks.begin(), state_.tasks.end(), [&restored_task](const Task& task) {
+                return task.id == restored_task.id;
+            });
+        if (current != state_.tasks.end() && current->due_at == restored_task.due_at &&
+            current->remind == restored_task.remind && current->reminded_at.has_value()) {
+            restored_task.reminded_at = current->reminded_at;
+            restored_task.updated_at = std::max(restored_task.updated_at, current->updated_at);
+        }
+    }
+    state_ = std::move(restored);
     undo_.reset();
     record_change(std::move(affected));
     return true;

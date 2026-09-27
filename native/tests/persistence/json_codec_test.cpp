@@ -92,6 +92,9 @@ TEST_CASE(json_codec_ignores_unknown_fields_and_loads_fixture) {
     EXPECT_EQ(decoded.state->tasks[0].id, L"fixture-1");
     EXPECT_EQ(decoded.state->tasks[0].title, L"中文任务 😀");
     EXPECT_EQ(decoded.state->settings.remind_advance_minutes, 10);
+    EXPECT_EQ(decoded.state->settings.selectable_hotkey, L"Ctrl+Shift+K");
+    EXPECT_EQ(decoded.state->settings.floating_geometry.width, 444.0);
+    EXPECT_EQ(decoded.state->settings.floating_geometry.height, 555.0);
 }
 
 TEST_CASE(json_codec_rejects_invalid_utf8) {
@@ -120,4 +123,28 @@ TEST_CASE(json_codec_drops_blank_title_task_with_issue) {
     EXPECT_TRUE(decoded.state.has_value());
     EXPECT_TRUE(decoded.state->tasks.empty());
     EXPECT_TRUE(!decoded.issues.empty());
+}
+
+TEST_CASE(json_codec_preserves_legacy_schema_v1_setting_names) {
+    const auto decoded = desktop_todo::decode_state_utf8(bytes(
+        R"({"schemaVersion":1,"tasks":[],"settings":{"hotkeySelectable":"Ctrl+Shift+K","floatingGeometry":{"x":1,"y":2,"w":444,"h":555}}})"));
+
+    EXPECT_TRUE(decoded.state.has_value());
+    EXPECT_EQ(decoded.state->settings.selectable_hotkey, L"Ctrl+Shift+K");
+    EXPECT_EQ(decoded.state->settings.floating_geometry.width, 444.0);
+    EXPECT_EQ(decoded.state->settings.floating_geometry.height, 555.0);
+    const auto encoded = desktop_todo::encode_state_utf8(*decoded.state);
+    const std::string output{reinterpret_cast<const char*>(encoded.data()), encoded.size()};
+    EXPECT_TRUE(output.find("hotkeySelectable") != std::string::npos);
+    EXPECT_TRUE(output.find("\"w\":444") != std::string::npos);
+}
+
+TEST_CASE(json_codec_rejects_fractional_schema_and_signed_timestamp_fields) {
+    const auto schema = desktop_todo::decode_state_utf8(
+        bytes(R"({"schemaVersion":1.5,"tasks":[],"settings":{}})"));
+    const auto timestamp = desktop_todo::decode_state_utf8(bytes(
+        R"({"schemaVersion":1,"tasks":[{"id":"bad","title":"bad","createdAt":"2026-09-26T-1:00:00.000Z","updatedAt":"2026-09-26T01:00:00.000Z"}],"settings":{}})"));
+
+    EXPECT_TRUE(!schema.state.has_value());
+    EXPECT_TRUE(!timestamp.state.has_value());
 }

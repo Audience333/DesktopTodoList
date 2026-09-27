@@ -148,11 +148,47 @@ TEST_CASE(state_repository_win32_adapter_round_trips_in_temporary_directory) {
     StateRepository writer{files, temporary.path, [] { return L"20260927-100000"; }};
 
     EXPECT_TRUE(writer.save(state(L"disk")).ok);
+    EXPECT_TRUE(writer.save(state(L"disk-replaced")).ok);
     EXPECT_TRUE(writer.ensure_daily_backup(state(L"disk"), LocalDate{2026, 9, 27}).ok);
 
     StateRepository reader{files, temporary.path, [] { return L"20260927-100001"; }};
     const auto loaded = reader.load();
     EXPECT_EQ(loaded.status, LoadStatus::ok);
-    EXPECT_EQ(loaded.state.tasks[0].id, L"disk");
+    EXPECT_EQ(loaded.state.tasks[0].id, L"disk-replaced");
     EXPECT_TRUE(files.exists(temporary.path / L"backups/2026-09-27.json"));
+}
+
+TEST_CASE(state_repository_does_not_overwrite_corrupt_source_when_preservation_fails) {
+    FakeFileSystem files;
+    const std::vector<std::byte> corrupt{std::byte{'x'}};
+    files.files[key(root / L"state.json")] = corrupt;
+    files.files[key(root / L"backups/2026-09-26.json")] = desktop_todo::encode_state_utf8(state(L"backup"));
+    files.fail_operation = 1;
+    StateRepository repository{files, root, [] { return L"20260927-100000"; }};
+
+    const auto loaded = repository.load();
+
+    EXPECT_EQ(loaded.status, LoadStatus::reset);
+    EXPECT_EQ(files.files[key(root / L"state.json")], corrupt);
+    EXPECT_EQ(files.operations.size(), std::size_t{1});
+}
+
+TEST_CASE(state_repository_missing_main_recovers_backup_after_interrupted_restore) {
+    FakeFileSystem files;
+    files.files[key(root / L"state.json")] = {std::byte{'x'}};
+    files.files[key(root / L"backups/2026-09-26.json")] = desktop_todo::encode_state_utf8(state(L"backup"));
+    files.fail_operation = 4;
+    StateRepository first{files, root, [] { return L"20260927-100000"; }};
+    const auto interrupted = first.load();
+    EXPECT_EQ(interrupted.status, LoadStatus::restored);
+    EXPECT_TRUE(!files.exists(root / L"state.json"));
+    files.fail_operation.reset();
+    files.operations.clear();
+    StateRepository restarted{files, root, [] { return L"20260927-100001"; }};
+
+    const auto loaded = restarted.load();
+
+    EXPECT_EQ(loaded.status, LoadStatus::restored);
+    EXPECT_EQ(loaded.state.tasks[0].id, L"backup");
+    EXPECT_TRUE(files.exists(root / L"state.json"));
 }

@@ -37,7 +37,6 @@ int verify_core(const std::filesystem::path& fixture) {
     if (!source.ok()) return 10;
     const auto decoded = desktop_todo::decode_state_utf8(source.bytes);
     if (!decoded.state.has_value()) return 11;
-
     TemporaryDirectory temporary;
     if (temporary.path.empty()) return 12;
     desktop_todo::StateRepository repository{
@@ -56,12 +55,12 @@ int verify_core(const std::filesystem::path& fixture) {
     query.include_completed = true;
     static_cast<void>(service.query(query));
     if (!service.flush()) return 15;
-
     desktop_todo::StateRepository reloader{
         files, temporary.path, [] { return L"verification-reload"; }};
     const auto loaded = reloader.load();
-    return desktop_todo::encode_state_utf8(loaded.state) ==
-        desktop_todo::encode_state_utf8(service.snapshot()) ? 0 : 16;
+    const auto reloaded_json = desktop_todo::encode_state_utf8(loaded.state);
+    const auto service_json = desktop_todo::encode_state_utf8(service.snapshot());
+    return reloaded_json == service_json ? 0 : 16;
 }
 
 }  // namespace

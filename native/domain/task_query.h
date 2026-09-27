@@ -2,6 +2,7 @@
 
 #include "domain/types.h"
 
+#include <chrono>
 #include <string>
 #include <vector>
 
@@ -12,6 +13,7 @@ struct QuerySpec {
     std::wstring search;
     int week_starts_on = 1;
     bool include_completed = false;
+    std::chrono::minutes utc_offset{};
 };
 
 struct TaskRef {

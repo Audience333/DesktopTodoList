@@ -14,13 +14,16 @@
 
 namespace desktop_todo {
 
-enum class AppEventType { started, state_changed, reminders, save_error };
+enum class AppEventType { started, state_changed, reminders, recovery, save_error };
 
 struct AppEvent {
     AppEventType type = AppEventType::state_changed;
     std::vector<std::wstring> affected_ids;
     ReminderBatch reminder_batch;
     std::wstring message;
+    std::optional<LoadStatus> load_status;
+    std::vector<ValidationIssue> issues;
+    std::filesystem::path preserved_source;
 };
 
 class AppService {
@@ -53,6 +56,8 @@ public:
     [[nodiscard]] ExportResult export_to(const std::filesystem::path& destination) const;
     bool reset_to_defaults(bool confirmed);
     [[nodiscard]] ReminderBatch tick_reminders();
+    bool acknowledge_reminders(const std::vector<std::wstring>& ids);
+    bool maintenance();
     bool flush();
 
     [[nodiscard]] const AppState& snapshot() const;
@@ -62,6 +67,7 @@ public:
 private:
     void recreate_store(AppState state);
     void collect_change();
+    void prune_selection();
     void emit(AppEvent event) const;
 
     StateRepository& repository_;
@@ -72,6 +78,8 @@ private:
     std::unique_ptr<TaskStore> store_;
     SelectionModel selection_;
     bool dirty_ = false;
+    std::optional<Clock::time_point> save_due_;
+    std::optional<LocalDate> last_backup_date_;
 };
 
 }  // namespace desktop_todo

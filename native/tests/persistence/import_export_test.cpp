@@ -87,3 +87,14 @@ TEST_CASE(import_export_merge_adds_ids_and_uses_newer_duplicate) {
     EXPECT_EQ(result.candidate->tasks[0].title, L"导入较新");
     EXPECT_EQ(result.candidate->tasks[1].id, L"keep");
 }
+
+TEST_CASE(import_export_duplicate_ids_inside_source_choose_newer_item) {
+    const auto source = bytes(
+        R"({"schemaVersion":1,"tasks":[{"id":"same","title":"旧","createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T01:00:00.000Z"},{"id":"same","title":"新","createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T02:00:00.000Z"}],"settings":{}})");
+
+    const auto result = desktop_todo::prepare_import(AppState{}, source, ImportMode::replace);
+
+    EXPECT_TRUE(result.candidate.has_value());
+    EXPECT_EQ(result.candidate->tasks.size(), std::size_t{1});
+    EXPECT_EQ(result.candidate->tasks[0].title, L"新");
+}

@@ -142,3 +142,12 @@ TEST_CASE(selection_model_completion_checkbox_is_independent_of_selection) {
     EXPECT_EQ(selection.snapshot().anchor_id, before.anchor_id);
     EXPECT_EQ(selection.snapshot().focus_id, before.focus_id);
 }
+
+TEST_CASE(selection_model_keyboard_focus_starts_at_edge_and_does_not_toggle_at_boundary) {
+    SelectionModel selection;
+
+    EXPECT_EQ(selection.move_focus(visible, 1, false), std::optional<std::wstring>{L"a"});
+    EXPECT_EQ(selection.snapshot().selected_ids, std::vector<std::wstring>{L"a"});
+    EXPECT_EQ(selection.move_focus(visible, -1, false), std::optional<std::wstring>{L"a"});
+    EXPECT_EQ(selection.snapshot().selected_ids, std::vector<std::wstring>{L"a"});
+}

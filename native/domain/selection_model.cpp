@@ -93,12 +93,20 @@ std::optional<std::wstring> SelectionModel::move_focus(
     auto current = focus_id_.has_value()
         ? std::find(visible_ids.begin(), visible_ids.end(), *focus_id_)
         : visible_ids.end();
-    auto current_index = current == visible_ids.end()
-        ? (offset < 0 ? static_cast<int>(visible_ids.size()) - 1 : 0)
-        : static_cast<int>(current - visible_ids.begin());
+    if (current == visible_ids.end()) {
+        const auto& edge = offset < 0 ? visible_ids.back() : visible_ids.front();
+        selected_ids_ = {edge};
+        anchor_id_ = edge;
+        focus_id_ = edge;
+        return edge;
+    }
+    const auto current_index = static_cast<int>(current - visible_ids.begin());
     const auto maximum = static_cast<int>(visible_ids.size()) - 1;
     const auto next_index = std::clamp(current_index + offset, 0, maximum);
     const auto& next = visible_ids[static_cast<std::size_t>(next_index)];
+    if (next == *focus_id_) {
+        return next;
+    }
     if (extend) {
         select_range(next, visible_ids, false);
     } else {

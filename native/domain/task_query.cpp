@@ -32,14 +32,15 @@ bool matches_search(const Task& task, const std::wstring& search) {
     return std::any_of(task.tags.begin(), task.tags.end(), contains);
 }
 
-std::chrono::sys_days day_of(Clock::time_point value) {
-    return std::chrono::floor<std::chrono::days>(value);
+std::chrono::sys_days day_of(Clock::time_point value, std::chrono::minutes utc_offset) {
+    return std::chrono::floor<std::chrono::days>(value + utc_offset);
 }
 
 std::pair<std::chrono::sys_days, std::chrono::sys_days> week_range(
     Clock::time_point now,
-    int week_starts_on) {
-    const auto today = day_of(now);
+    int week_starts_on,
+    std::chrono::minutes utc_offset) {
+    const auto today = day_of(now, utc_offset);
     const auto weekday = std::chrono::weekday{today}.c_encoding();
     const auto start_day = week_starts_on == 0 ? 0U : 1U;
     const auto offset = (weekday + 7U - start_day) % 7U;
@@ -68,14 +69,16 @@ bool matches_view(
         return false;
     }
     if (query.view == ViewKind::today) {
-        return *task.due_at < now || day_of(*task.due_at) == day_of(now);
+        return *task.due_at < now ||
+            day_of(*task.due_at, query.utc_offset) == day_of(now, query.utc_offset);
     }
     if (query.view == ViewKind::week) {
         if (*task.due_at < now) {
             return true;
         }
-        const auto [start, end] = week_range(now, query.week_starts_on);
-        return *task.due_at >= start && *task.due_at < end;
+        const auto [start, end] = week_range(now, query.week_starts_on, query.utc_offset);
+        const auto local_due = *task.due_at + query.utc_offset;
+        return local_due >= start && local_due < end;
     }
     return false;
 }
@@ -141,14 +144,21 @@ std::vector<TaskRef> query_tasks(
 }
 
 void compact_order(std::vector<Task>& tasks) {
+    std::vector<Task*> ordered;
+    ordered.reserve(tasks.size());
+    for (auto& task : tasks) ordered.push_back(&task);
+    std::stable_sort(ordered.begin(), ordered.end(), [](const Task* left, const Task* right) {
+        if (left->order != right->order) return left->order < right->order;
+        return left->id < right->id;
+    });
     bool compact = false;
-    for (std::size_t index = 0; index < tasks.size(); ++index) {
-        const auto order = tasks[index].order;
+    for (std::size_t index = 0; index < ordered.size(); ++index) {
+        const auto order = ordered[index]->order;
         if (!std::isfinite(order) || std::abs(order) > maximum_order_magnitude) {
             compact = true;
             break;
         }
-        if (index > 0 && std::abs(order - tasks[index - 1].order) < minimum_order_gap) {
+        if (index > 0 && std::abs(order - ordered[index - 1]->order) < minimum_order_gap) {
             compact = true;
             break;
         }
@@ -156,8 +166,8 @@ void compact_order(std::vector<Task>& tasks) {
     if (!compact) {
         return;
     }
-    for (std::size_t index = 0; index < tasks.size(); ++index) {
-        tasks[index].order = static_cast<double>(index + 1);
+    for (std::size_t index = 0; index < ordered.size(); ++index) {
+        ordered[index]->order = static_cast<double>(index + 1);
     }
 }
 

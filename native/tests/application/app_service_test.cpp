@@ -4,6 +4,7 @@
 #include "persistence/json_codec.h"
 #include "persistence/fake_file_system.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <filesystem>
@@ -43,6 +44,7 @@ std::wstring key(const std::filesystem::path& path) {
 
 struct Harness {
     Clock::time_point now{std::chrono::milliseconds{1'800'000'000'000}};
+    LocalDate today{2026, 9, 27};
     FakeFileSystem files;
     StateRepository repository{files, root, [] { return L"20260927-120000"; }};
     std::vector<AppEvent> events;
@@ -51,7 +53,7 @@ struct Harness {
         repository,
         [this] { return now; },
         [this] { return L"id-" + std::to_wstring(next_id++); },
-        [] { return LocalDate{2026, 9, 27}; },
+        [this] { return today; },
         [this](const AppEvent& event) { events.push_back(event); }};
 };
 
@@ -134,11 +136,94 @@ TEST_CASE(app_service_reminder_tick_marks_delivered_and_flushes_it) {
     const auto batch = harness.service.tick_reminders();
 
     EXPECT_EQ(batch.items.size(), std::size_t{1});
+    EXPECT_TRUE(!harness.service.snapshot().tasks[0].reminded_at.has_value());
+    EXPECT_TRUE(harness.service.acknowledge_reminders({L"due"}));
     EXPECT_EQ(harness.service.snapshot().tasks[0].reminded_at, std::optional{harness.now});
     EXPECT_TRUE(harness.service.flush());
     const auto persisted = desktop_todo::decode_state_utf8(
         harness.files.files[key(root / L"state.json")]);
     EXPECT_EQ(persisted.state->tasks[0].reminded_at, std::optional{harness.now});
+}
+
+TEST_CASE(app_service_start_emits_grouped_startup_reminders_without_acknowledging) {
+    Harness harness;
+    AppState initial;
+    auto first = task(L"one", L"一", harness.now - std::chrono::hours{1});
+    auto second = task(L"two", L"二", harness.now - std::chrono::hours{1});
+    first.due_at = harness.now - std::chrono::minutes{1};
+    second.due_at = harness.now - std::chrono::minutes{2};
+    initial.tasks = {first, second};
+    harness.files.files[key(root / L"state.json")] = desktop_todo::encode_state_utf8(initial);
+
+    EXPECT_TRUE(harness.service.start());
+
+    const auto reminder_event = std::find_if(
+        harness.events.begin(), harness.events.end(), [](const AppEvent& event) {
+            return event.type == AppEventType::reminders;
+        });
+    EXPECT_TRUE(reminder_event != harness.events.end());
+    EXPECT_TRUE(reminder_event->reminder_batch.startup);
+    EXPECT_TRUE(reminder_event->reminder_batch.grouped);
+    EXPECT_TRUE(!harness.service.snapshot().tasks[0].reminded_at.has_value());
+}
+
+TEST_CASE(app_service_debounced_maintenance_saves_after_deadline) {
+    Harness harness;
+    EXPECT_TRUE(harness.service.start());
+    EXPECT_TRUE(harness.service.add_task(AddTaskCommand{.title = L"自动保存"}).has_value());
+
+    harness.now += std::chrono::milliseconds{499};
+    EXPECT_TRUE(harness.service.maintenance());
+    EXPECT_TRUE(!harness.files.exists(root / L"state.json"));
+    harness.now += std::chrono::milliseconds{1};
+    EXPECT_TRUE(harness.service.maintenance());
+    EXPECT_TRUE(harness.files.exists(root / L"state.json"));
+}
+
+TEST_CASE(app_service_maintenance_creates_backup_after_day_rollover) {
+    Harness harness;
+    EXPECT_TRUE(harness.service.start());
+    harness.today = LocalDate{2026, 9, 28};
+
+    EXPECT_TRUE(harness.service.maintenance());
+
+    EXPECT_TRUE(harness.files.exists(root / L"backups/2026-09-28.json"));
+}
+
+TEST_CASE(app_service_replace_import_creates_current_state_backup_and_aborts_on_failure) {
+    Harness harness;
+    EXPECT_TRUE(harness.service.start());
+    EXPECT_TRUE(harness.service.add_task(AddTaskCommand{.title = L"当前"}).has_value());
+    AppState incoming;
+    incoming.tasks = {task(L"new", L"新", harness.now)};
+    auto prepared = harness.service.prepare_import(
+        desktop_todo::encode_state_utf8(incoming), ImportMode::replace);
+
+    EXPECT_TRUE(harness.service.accept_import(std::move(prepared)));
+    EXPECT_TRUE(harness.files.exists(root / L"backups/pre-import-20260927-120000.json"));
+    const auto backup = desktop_todo::decode_state_utf8(
+        harness.files.files[key(root / L"backups/pre-import-20260927-120000.json")]);
+    EXPECT_EQ(backup.state->tasks[0].title, L"当前");
+
+    auto second = harness.service.prepare_import(
+        desktop_todo::encode_state_utf8(AppState{}), ImportMode::replace);
+    harness.files.fail_operation = harness.files.operations.size() + 1;
+    EXPECT_TRUE(!harness.service.accept_import(std::move(second)));
+    EXPECT_EQ(harness.service.snapshot().tasks[0].id, L"new");
+}
+
+TEST_CASE(app_service_reports_recovery_status) {
+    Harness harness;
+    harness.files.files[key(root / L"state.json")] = {std::byte{'x'}};
+    AppState backup;
+    backup.tasks = {task(L"safe", L"恢复", harness.now)};
+    harness.files.files[key(root / L"backups/2026-09-26.json")] = desktop_todo::encode_state_utf8(backup);
+
+    EXPECT_TRUE(harness.service.start());
+
+    EXPECT_TRUE(std::any_of(harness.events.begin(), harness.events.end(), [](const AppEvent& event) {
+        return event.type == AppEventType::recovery;
+    }));
 }
 
 TEST_CASE(app_service_save_failure_emits_event_without_state_loss) {

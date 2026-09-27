@@ -9,6 +9,7 @@
 #include <winrt/base.h>
 
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <stdexcept>
 
@@ -19,30 +20,15 @@ using winrt::Windows::Data::Json::JsonArray;
 using winrt::Windows::Data::Json::JsonObject;
 using winrt::Windows::Data::Json::JsonValue;
 
-class ApartmentScope {
-public:
-    ApartmentScope() {
+void ensure_apartment() {
+    thread_local const bool initialized = [] {
         const auto result = RoInitialize(RO_INIT_MULTITHREADED);
-        uninitialize_ = result == S_OK || result == S_FALSE;
         if (FAILED(result) && result != RPC_E_CHANGED_MODE) {
             winrt::check_hresult(result);
         }
-    }
-    ~ApartmentScope() {
-        if (uninitialize_) {
-            RoUninitialize();
-        }
-    }
-private:
-    bool uninitialize_ = false;
-};
-
-void ensure_apartment() {
-    // C++/WinRT caches activation factories for the lifetime of the calling
-    // thread. Keep COM initialized for that same lifetime instead of tearing
-    // it down after every codec call.
-    thread_local ApartmentScope apartment;
-    (void)apartment;
+        return true;
+    }();
+    (void)initialized;
 }
 
 std::wstring strict_wide(std::span<const std::byte> source) {
@@ -85,6 +71,17 @@ std::optional<Clock::time_point> parse_time(const JsonObject& object, std::wstri
         return std::nullopt;
     }
     const auto value = std::wstring{object.GetNamedString(key)};
+    if (value.size() != 24 || value[4] != L'-' || value[7] != L'-' ||
+        value[10] != L'T' || value[13] != L':' || value[16] != L':' ||
+        value[19] != L'.' || value[23] != L'Z') {
+        throw std::invalid_argument{"invalid UTC timestamp"};
+    }
+    for (const auto index : {0, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18, 20, 21, 22}) {
+        if (value[static_cast<std::size_t>(index)] < L'0' ||
+            value[static_cast<std::size_t>(index)] > L'9') {
+            throw std::invalid_argument{"invalid UTC timestamp"};
+        }
+    }
     int year = 0;
     int month = 0;
     int day = 0;
@@ -102,7 +99,8 @@ std::optional<Clock::time_point> parse_time(const JsonObject& object, std::wstri
     const auto date = std::chrono::year{year} /
         std::chrono::month{static_cast<unsigned>(month)} /
         std::chrono::day{static_cast<unsigned>(day)};
-    if (!date.ok() || hour > 23 || minute > 59 || second > 59 || millisecond > 999) {
+    if (!date.ok() || year < 1 || hour < 0 || hour > 23 || minute < 0 || minute > 59 ||
+        second < 0 || second > 59 || millisecond < 0 || millisecond > 999) {
         throw std::invalid_argument{"invalid UTC timestamp"};
     }
     return Clock::time_point{
@@ -182,7 +180,9 @@ void decode_settings(const JsonObject& object, Settings& settings) {
     settings.default_filter = filter == L"week" ? ViewKind::week : filter == L"all" ? ViewKind::all :
         filter == L"done" ? ViewKind::done : ViewKind::today;
     settings.hotkey = named_string(object, L"hotkey", settings.hotkey);
-    settings.selectable_hotkey = named_string(object, L"selectableHotkey", settings.selectable_hotkey);
+    settings.selectable_hotkey = named_string(
+        object, L"hotkeySelectable",
+        named_string(object, L"selectableHotkey", settings.selectable_hotkey));
     settings.week_starts_on = static_cast<int>(named_number(object, L"weekStartsOn", 1));
     settings.remind_advance_minutes = static_cast<int>(named_number(object, L"remindAdvanceMinutes", 0));
     settings.auto_start = named_bool(object, L"autoStart", false);
@@ -206,8 +206,10 @@ void decode_settings(const JsonObject& object, Settings& settings) {
             winrt::Windows::Data::Json::JsonValueType::Null) {
             settings.floating_geometry.y = geometry.GetNamedNumber(L"y");
         }
-        settings.floating_geometry.width = named_number(geometry, L"width", 360.0);
-        settings.floating_geometry.height = named_number(geometry, L"height", 480.0);
+        settings.floating_geometry.width = named_number(
+            geometry, L"w", named_number(geometry, L"width", 360.0));
+        settings.floating_geometry.height = named_number(
+            geometry, L"h", named_number(geometry, L"height", 480.0));
     }
 }
 
@@ -247,7 +249,7 @@ JsonObject encode_settings(const Settings& settings) {
     put(object, L"theme", settings.theme == Theme::dark ? L"dark" : settings.theme == Theme::light ? L"light" : L"system");
     const auto filter = settings.default_filter == ViewKind::week ? L"week" : settings.default_filter == ViewKind::all ? L"all" : settings.default_filter == ViewKind::done ? L"done" : L"today";
     put(object, L"defaultFilter", filter); put(object, L"hotkey", settings.hotkey);
-    put(object, L"selectableHotkey", settings.selectable_hotkey); put(object, L"weekStartsOn", static_cast<double>(settings.week_starts_on));
+    put(object, L"hotkeySelectable", settings.selectable_hotkey); put(object, L"weekStartsOn", static_cast<double>(settings.week_starts_on));
     put(object, L"remindAdvanceMinutes", static_cast<double>(settings.remind_advance_minutes));
     put(object, L"autoStart", settings.auto_start); put(object, L"startMinimized", settings.start_minimized);
     put(object, L"windowMode", settings.window_mode == WindowMode::floating ? L"floating" : L"normal");
@@ -256,7 +258,7 @@ JsonObject encode_settings(const Settings& settings) {
     JsonObject geometry;
     if (settings.floating_geometry.x) put(geometry, L"x", *settings.floating_geometry.x); else geometry.Insert(L"x", JsonValue::CreateNullValue());
     if (settings.floating_geometry.y) put(geometry, L"y", *settings.floating_geometry.y); else geometry.Insert(L"y", JsonValue::CreateNullValue());
-    put(geometry, L"width", settings.floating_geometry.width); put(geometry, L"height", settings.floating_geometry.height);
+    put(geometry, L"w", settings.floating_geometry.width); put(geometry, L"h", settings.floating_geometry.height);
     object.Insert(L"floatingGeometry", geometry);
     put(object, L"multiSelectEnabled", settings.multi_select_enabled); put(object, L"rubberBandSelect", settings.rubber_band_select);
     put(object, L"keepSelectionAcrossViews", settings.keep_selection_across_views);
@@ -270,7 +272,12 @@ DecodeResult decode_state_utf8(std::span<const std::byte> source) {
         ensure_apartment();
         const auto root = JsonObject::Parse(strict_wide(source));
         AppState state;
-        state.schema_version = static_cast<int>(root.GetNamedNumber(L"schemaVersion"));
+        const auto schema = root.GetNamedNumber(L"schemaVersion");
+        if (!std::isfinite(schema) || schema != 1.0) {
+            return {std::nullopt, {{ValidationIssueCode::unsupported_schema, std::nullopt}},
+                L"Unsupported schema"};
+        }
+        state.schema_version = 1;
         if (root.HasKey(L"tasks")) {
             for (const auto& value : root.GetNamedArray(L"tasks")) {
                 state.tasks.push_back(decode_task(value.GetObject()));
