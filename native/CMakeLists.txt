@@ -8,6 +8,7 @@ endif()
 
 add_library(desktop_todo_core STATIC
   domain/build_info.cpp
+  domain/reminder_engine.cpp
   domain/selection_model.cpp
   domain/task_query.cpp
   domain/task_store.cpp
