@@ -13,9 +13,11 @@ add_library(desktop_todo_core STATIC
   domain/task_query.cpp
   domain/task_store.cpp
   domain/validation.cpp
+  persistence/import_export.cpp
+  persistence/json_codec.cpp
 )
 target_include_directories(desktop_todo_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(desktop_todo_core PUBLIC desktop_todo_options)
+target_link_libraries(desktop_todo_core PUBLIC desktop_todo_options WindowsApp)
 
 add_executable(DesktopTodoList WIN32
   app/main.cpp
