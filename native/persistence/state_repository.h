@@ -46,7 +46,11 @@ public:
     [[nodiscard]] LoadResult load();
     [[nodiscard]] SaveResult save(const AppState& state);
     [[nodiscard]] BackupResult ensure_daily_backup(const AppState& state, LocalDate today);
+    [[nodiscard]] BackupResult create_reset_backup(const AppState& state);
     [[nodiscard]] ExportResult preserve_corrupt_source();
+    [[nodiscard]] ExportResult export_to(
+        const std::filesystem::path& destination,
+        const AppState& state);
 
 private:
     [[nodiscard]] SaveResult save_to(

@@ -181,6 +181,23 @@ bool TaskStore::reorder(
     return true;
 }
 
+bool TaskStore::mark_reminded(
+    const std::vector<std::wstring>& ids,
+    Clock::time_point delivered_at) {
+    const std::unordered_set<std::wstring> requested(ids.begin(), ids.end());
+    std::vector<std::wstring> changed;
+    for (auto& task : state_.tasks) {
+        if (requested.contains(task.id) && task.reminded_at != delivered_at) {
+            task.reminded_at = delivered_at;
+            task.updated_at = delivered_at;
+            changed.push_back(task.id);
+        }
+    }
+    if (changed.empty()) return false;
+    record_change(std::move(changed));
+    return true;
+}
+
 bool TaskStore::can_undo() {
     expire_undo();
     return undo_.has_value();

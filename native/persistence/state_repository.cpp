@@ -92,12 +92,25 @@ BackupResult StateRepository::ensure_daily_backup(const AppState& state, LocalDa
     return {};
 }
 
+BackupResult StateRepository::create_reset_backup(const AppState& state) {
+    return save_to(
+        directory_ / L"backups" / (L"pre-reset-" + timestamp_() + L".json"),
+        state);
+}
+
 ExportResult StateRepository::preserve_corrupt_source() {
     const auto source = directory_ / L"state.json";
     if (!files_.exists(source)) return {};
     const auto destination = directory_ / (L"state.corrupt-" + timestamp_() + L".json");
     const auto moved = files_.move(source, destination);
     return {moved.ok, moved.ok ? destination : std::filesystem::path{}, moved.error};
+}
+
+ExportResult StateRepository::export_to(
+    const std::filesystem::path& destination,
+    const AppState& state) {
+    const auto saved = save_to(destination, state);
+    return {saved.ok, saved.ok ? destination : std::filesystem::path{}, saved.error};
 }
 
 }  // namespace desktop_todo

@@ -1,4 +1,5 @@
 add_executable(desktop_todo_tests
+  application/app_service_test.cpp
   test_main.cpp
   domain/reminder_engine_test.cpp
   domain/selection_model_test.cpp
@@ -26,3 +27,4 @@ add_test(NAME native.validation COMMAND desktop_todo_tests --filter validation_)
 add_test(NAME native.import_export COMMAND desktop_todo_tests --filter import_export_)
 add_test(NAME native.json_codec COMMAND desktop_todo_tests --filter json_codec_)
 add_test(NAME native.state_repository COMMAND desktop_todo_tests --filter state_repository_)
+add_test(NAME native.app_service COMMAND desktop_todo_tests --filter app_service_)

@@ -22,6 +22,9 @@ public:
     std::size_t delete_tasks(const std::vector<std::wstring>& ids);
     std::size_t clear_completed(bool confirmed);
     bool reorder(std::wstring_view id, std::wstring_view target_id, DropPosition position);
+    bool mark_reminded(
+        const std::vector<std::wstring>& ids,
+        Clock::time_point delivered_at);
 
     [[nodiscard]] bool can_undo();
     bool undo();

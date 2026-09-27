@@ -40,6 +40,7 @@ try {
   if ($ctest -and (Test-Path -LiteralPath 'out\build\windows-x64\CTestTestfile.cmake')) {
     $ctestPath = if ($ctest.Source) { $ctest.Source } else { $ctest.FullName }
     Invoke-TestGroup -Name 'Native' -File $ctestPath -Arguments @('--preset','windows-x64-debug','--output-on-failure')
+    Invoke-TestGroup -Name 'Native Core Acceptance' -File 'powershell.exe' -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File','native/tests/native-core-acceptance.ps1')
   }
   Invoke-TestGroup -Name 'JavaScript' -File 'node.exe' -Arguments @('tests/run-tests.js')
   Invoke-TestGroup -Name 'Server' -File 'powershell.exe' -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File','tests/test-server.ps1')

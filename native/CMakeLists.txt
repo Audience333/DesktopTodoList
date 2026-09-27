@@ -7,6 +7,7 @@ if(MSVC)
 endif()
 
 add_library(desktop_todo_core STATIC
+  application/app_service.cpp
   domain/build_info.cpp
   domain/reminder_engine.cpp
   domain/selection_model.cpp
@@ -25,5 +26,6 @@ add_executable(DesktopTodoList WIN32
   app/main.cpp
 )
 target_link_libraries(DesktopTodoList PRIVATE desktop_todo_core)
+target_link_libraries(DesktopTodoList PRIVATE Shell32)
 
 add_subdirectory(tests)
