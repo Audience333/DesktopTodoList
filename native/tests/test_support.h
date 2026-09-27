@@ -40,9 +40,14 @@ inline void expect_true(bool value, std::string_view expression) {
     }
 }
 
-inline int run_all() {
+inline int run_all(std::string_view filter = {}) {
     int failures = 0;
+    int selected = 0;
     for (const auto& test : registry()) {
+        if (!filter.empty() && test.name.find(filter) == std::string_view::npos) {
+            continue;
+        }
+        ++selected;
         try {
             test.function();
             std::cout << "[PASS] " << test.name << '\n';
@@ -53,6 +58,10 @@ inline int run_all() {
             ++failures;
             std::cerr << "[FAIL] " << test.name << ": unknown exception\n";
         }
+    }
+    if (selected == 0) {
+        std::cerr << "[FAIL] no tests matched filter: " << filter << '\n';
+        return 2;
     }
     return failures == 0 ? 0 : 1;
 }

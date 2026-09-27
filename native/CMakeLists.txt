@@ -8,6 +8,7 @@ endif()
 
 add_library(desktop_todo_core STATIC
   domain/build_info.cpp
+  domain/validation.cpp
 )
 target_include_directories(desktop_todo_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(desktop_todo_core PUBLIC desktop_todo_options)
