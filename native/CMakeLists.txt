@@ -15,6 +15,8 @@ add_library(desktop_todo_core STATIC
   domain/validation.cpp
   persistence/import_export.cpp
   persistence/json_codec.cpp
+  persistence/state_repository.cpp
+  persistence/win32_file_system.cpp
 )
 target_include_directories(desktop_todo_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(desktop_todo_core PUBLIC desktop_todo_options WindowsApp)

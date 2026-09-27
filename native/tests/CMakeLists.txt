@@ -7,6 +7,7 @@ add_executable(desktop_todo_tests
   domain/validation_test.cpp
   persistence/import_export_test.cpp
   persistence/json_codec_test.cpp
+  persistence/state_repository_test.cpp
 )
 
 target_compile_features(desktop_todo_tests PRIVATE cxx_std_20)
@@ -24,3 +25,4 @@ add_test(NAME native.task_query COMMAND desktop_todo_tests --filter task_query_)
 add_test(NAME native.validation COMMAND desktop_todo_tests --filter validation_)
 add_test(NAME native.import_export COMMAND desktop_todo_tests --filter import_export_)
 add_test(NAME native.json_codec COMMAND desktop_todo_tests --filter json_codec_)
+add_test(NAME native.state_repository COMMAND desktop_todo_tests --filter state_repository_)
