@@ -248,23 +248,23 @@
 - Consumes: widget visibility commands and settings from Plan 1.
 - Produces: `class TrayIcon` with `install`, `update_count`, `update_interaction_state`, `remove`; `class HotkeyService` with transactional `replace(HotkeyAction, HotkeyChord)`; default global show/hide `Ctrl+Alt+T`.
 
-- [ ] **Step 1: Write failing tray-model and hotkey transaction tests**
+- [x] **Step 1: Write failing tray-model and hotkey transaction tests**
 
   Assert menu check states, pending-count badge text, Explorer restart re-add, close-to-tray versus exit, show/hide toggle, default chord, conflict reporting, and failed replacement retaining the prior registered chord.
 
-- [ ] **Step 2: Run platform tests and confirm failure**
+- [x] **Step 2: Run platform tests and confirm failure**
 
   Run: `ctest --preset windows-x64-debug -R "tray_menu|hotkey_service" --output-on-failure`.
 
-- [ ] **Step 3: Implement tray and hotkey adapters**
+- [x] **Step 3: Implement tray and hotkey adapters**
 
   Keep menu generation separate from Win32 dispatch so its state is unit-testable. On `TaskbarCreated`, reinstall the icon before enabling click-through operations.
 
-- [ ] **Step 4: Run tests and an interactive Explorer-restart check**
+- [x] **Step 4: Run tests and an interactive Explorer-restart check**
 
   Expected: tray returns after Explorer restarts; failed hotkey changes leave a working recovery path.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
   ```powershell
   git add native/platform/windows native/tests/platform native/app native/CMakeLists.txt
