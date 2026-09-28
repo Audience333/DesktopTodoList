@@ -286,23 +286,23 @@
 - Consumes: widget HWND, tray availability, and hotkey service from Task 6.
 - Produces: `class WindowBehavior` with transactional `set_layer(WindowLayer)`, `set_click_through(bool)`, `restore_interaction`, `on_foreground_changed`, and `snapshot`; default escape chord `Ctrl+Alt+L`.
 
-- [ ] **Step 1: Write failing state-machine and safety tests**
+- [x] **Step 1: Write failing state-machine and safety tests**
 
   Assert top/normal/bottom exclusivity, style-bit changes, foreground-change bottom correction, click-through requiring two available escape routes, tray restoration, hotkey restoration, optional 30-minute recovery, startup state restoration, and refusal when tray installation or hotkey registration has failed.
 
-- [ ] **Step 2: Run window-behavior tests and confirm failure**
+- [x] **Step 2: Run window-behavior tests and confirm failure**
 
   Run: `ctest --preset windows-x64-debug -R window_behavior --output-on-failure`.
 
-- [ ] **Step 3: Implement documented Win32 layer and style transitions**
+- [x] **Step 3: Implement documented Win32 layer and style transitions**
 
   Apply style changes with `SetWindowLongPtrW` and `SetWindowPos(...SWP_FRAMECHANGED)`. Use documented Z-order APIs and a foreground WinEvent hook; never attach to undocumented desktop WorkerW windows.
 
-- [ ] **Step 4: Run unit tests and real-window harness**
+- [x] **Step 4: Run unit tests and real-window harness**
 
   Expected: both recovery paths independently restore interaction. Restricted or non-interactive environments must report explicit SKIP for system-level checks.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
   ```powershell
   git add native/platform/windows native/tests native/app
