@@ -7,6 +7,8 @@
 #include "platform/windows/hotkey_service.h"
 #include "platform/windows/tray_icon.h"
 #include "platform/windows/window_behavior.h"
+#include "platform/windows/notification_service.h"
+#include "platform/windows/autostart_service.h"
 #include "platform/windows/window_class.h"
 #include "presentation/data_transfer_dialog.h"
 #include "presentation/settings_panel.h"
@@ -17,6 +19,7 @@
 
 #include <chrono>
 #include <algorithm>
+#include <array>
 #include <cstdio>
 #include <filesystem>
 #include <optional>
@@ -28,6 +31,7 @@ namespace {
 constexpr UINT kShowExistingWidgetMessage = WM_APP + 0x31;
 constexpr UINT kTrayCallbackMessage = WM_APP + 0x41;
 constexpr UINT_PTR kWindowBehaviorTimer = 0xD712;
+constexpr UINT_PTR kReminderTimer = 0xD713;
 
 Clock::time_point current_time() {
     return std::chrono::time_point_cast<std::chrono::milliseconds>(
@@ -91,12 +95,21 @@ public:
         : data_directory_(data_directory()),
           repository_(files_, data_directory_, timestamp),
           service_(repository_, current_time, new_id, current_local_date,
-              [this](const AppEvent&) {
+              [this](const AppEvent& event) {
                   if (widget_) widget_->invalidate();
                   refresh_tray_state();
+                  if (event.type == AppEventType::reminders) {
+                      pending_reminders_ = event.reminder_batch;
+                      deliver_pending_reminders();
+                  }
               }) {}
 
     int run(HINSTANCE instance, int show_command) {
+        std::array<wchar_t, 32768> executable{};
+        const auto executable_length = GetModuleFileNameW(
+            nullptr, executable.data(), static_cast<DWORD>(executable.size()));
+        if (executable_length > 0 && executable_length < executable.size())
+            executable_path_ = executable.data();
         const auto launch_request = command_line_request();
         const auto acquired = single_instance_.acquire();
         if (acquired.status == AcquireStatus::secondary) {
@@ -141,6 +154,12 @@ public:
             cleanup_windows();
             return 10;
         }
+        notifications_ = std::make_unique<NotificationService>(NotificationApi{
+            {}, [this](const NotificationPayload& payload) {
+                return tray_ && tray_->show_balloon(payload.title, payload.body);
+            }});
+        SetTimer(message_, kReminderTimer, 60'000, nullptr);
+        deliver_pending_reminders();
         hotkeys_ = std::make_unique<HotkeyService>(message_);
         const auto hotkey = parse_hotkey(service_.snapshot().settings.hotkey);
         if (hotkey.has_value()) {
@@ -270,6 +289,11 @@ private:
                 static_cast<void>(self->service_.set_selectable(true));
                 self->refresh_tray_state();
             }
+            return 0;
+        }
+        if (message == WM_TIMER && self != nullptr && parameter == kReminderTimer) {
+            static_cast<void>(self->service_.tick_reminders());
+            self->deliver_pending_reminders();
             return 0;
         }
         if (message == WM_COMMAND && self != nullptr) {
@@ -403,6 +427,9 @@ private:
                         ? std::optional{std::chrono::minutes{30}} : std::nullopt);
                 }
                 return true;
+            },
+            [this](bool enabled) {
+                return autostart_service_.set_enabled(enabled, executable_path_).success;
             }};
     }
 
@@ -436,6 +463,12 @@ private:
     void show_transfer_error(HWND owner, std::wstring_view message) {
         std::wstring text{message};
         MessageBoxW(owner, text.c_str(), L"DesktopTodoList", MB_OK | MB_ICONWARNING);
+    }
+
+    void deliver_pending_reminders() {
+        if (!pending_reminders_ || !notifications_ || !tray_ || !tray_->installed()) return;
+        const auto result = notifications_->deliver(service_, *pending_reminders_);
+        if (result.delivered) pending_reminders_.reset();
     }
 
     bool import_file(const std::filesystem::path& path, HWND owner) {
@@ -554,7 +587,9 @@ private:
         }
         if (foreground_owner_ == this) foreground_owner_ = nullptr;
         if (message_ != nullptr) KillTimer(message_, kWindowBehaviorTimer);
+        if (message_ != nullptr) KillTimer(message_, kReminderTimer);
         window_behavior_.reset();
+        notifications_.reset();
         hotkeys_.reset();
         if (tray_) tray_->remove();
         tray_.reset();
@@ -573,6 +608,7 @@ private:
     Win32FileSystem files_;
     StateRepository repository_;
     AppService service_;
+    AutostartService autostart_service_;
     SingleInstance single_instance_;
     HWND message_ = nullptr;
     HWND broadcast_ = nullptr;
@@ -580,8 +616,11 @@ private:
     std::unique_ptr<TrayIcon> tray_;
     std::unique_ptr<HotkeyService> hotkeys_;
     std::unique_ptr<WindowBehavior> window_behavior_;
+    std::unique_ptr<NotificationService> notifications_;
     HWINEVENTHOOK foreground_hook_ = nullptr;
     std::optional<std::filesystem::path> pending_import_;
+    std::optional<ReminderBatch> pending_reminders_;
+    std::filesystem::path executable_path_;
     inline static Impl* foreground_owner_ = nullptr;
 };
 

@@ -114,6 +114,16 @@ void TrayIcon::update_state(TrayMenuState state) {
     if (installed_) static_cast<void>(shell_.update(state_));
 }
 
+bool TrayIcon::show_balloon(std::wstring_view title, std::wstring_view body) {
+    if (!installed_) return false;
+    auto data = notification_data(owner_, callback_message_, state_, NIF_INFO);
+    wcsncpy_s(data.szInfoTitle, std::wstring{title}.c_str(), _TRUNCATE);
+    wcsncpy_s(data.szInfo, std::wstring{body}.c_str(), _TRUNCATE);
+    data.dwInfoFlags = NIIF_INFO;
+    data.uTimeout = 10'000;
+    return Shell_NotifyIconW(NIM_MODIFY, &data) != FALSE;
+}
+
 void TrayIcon::remove() noexcept {
     if (installed_) static_cast<void>(shell_.remove());
     installed_ = false;

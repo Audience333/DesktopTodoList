@@ -65,6 +65,7 @@ public:
     void update_count(std::uint32_t pending_count);
     void update_interaction_state(bool enabled);
     void update_state(TrayMenuState state);
+    [[nodiscard]] bool show_balloon(std::wstring_view title, std::wstring_view body);
     void remove() noexcept;
     [[nodiscard]] bool handle_taskbar_created();
     [[nodiscard]] bool installed() const noexcept;

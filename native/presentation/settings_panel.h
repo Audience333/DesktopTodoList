@@ -19,6 +19,7 @@ struct SettingsApplyApi {
     std::function<bool(bool)> set_click_through;
     std::function<bool()> escape_routes_available;
     std::function<bool(const Settings&)> save;
+    std::function<bool(bool)> set_auto_start;
 };
 
 struct SettingsApplyResult {
@@ -51,7 +52,7 @@ private:
 
     HWND window_ = nullptr;
     HWND owner_ = nullptr;
-    HWND controls_[16]{};
+    HWND controls_[18]{};
     Settings initial_;
     Commit commit_;
     Transfer transfer_;

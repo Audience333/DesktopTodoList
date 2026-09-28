@@ -14,8 +14,11 @@ struct SettingsApiFixture {
     bool fail_recovery_hotkey = false;
     bool fail_layer = false;
     bool fail_click_through = false;
+    bool fail_auto_start = false;
+    bool fail_save = false;
     bool saved = false;
     bool tray = true;
+    std::vector<bool> auto_start_calls;
 
     SettingsApplyApi api() {
         return {
@@ -30,7 +33,11 @@ struct SettingsApiFixture {
             [this](WindowLayer) { return !fail_layer; },
             [this](bool) { return !fail_click_through; },
             [this] { return tray; },
-            [this](const Settings&) { saved = true; return true; }};
+            [this](const Settings&) { saved = true; return !fail_save; },
+            [this](bool enabled) {
+                auto_start_calls.push_back(enabled);
+                return !fail_auto_start;
+            }};
     }
 };
 
@@ -111,4 +118,18 @@ TEST_CASE(settings_panel_commits_theme_view_close_layer_and_selection_settings) 
 
     EXPECT_TRUE(result.success);
     EXPECT_TRUE(fixture.saved);
+}
+
+TEST_CASE(settings_panel_rolls_back_auto_start_if_persisting_the_settings_fails) {
+    Settings current;
+    Settings draft = current;
+    draft.auto_start = true;
+    SettingsApiFixture fixture;
+    fixture.fail_save = true;
+
+    const auto result = commit_settings_draft(current, draft, fixture.api());
+
+    EXPECT_TRUE(!result.success);
+    EXPECT_TRUE(result.rollback_complete);
+    EXPECT_EQ(fixture.auto_start_calls, std::vector<bool>({true, false}));
 }

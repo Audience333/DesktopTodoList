@@ -366,21 +366,21 @@
 - Consumes: reminder batches and settings commands from Plan 1.
 - Produces: `NotificationResult show_reminder(const ReminderBatch&)`; `AutostartResult set_enabled(bool, std::filesystem::path executable)`; UI Automation fragments for visible logical controls and virtual list rows.
 
-- [ ] **Step 1: Write failing adapter and accessibility tests**
+- [x] **Step 1: Write failing adapter and accessibility tests**
 
   Assert startup aggregation text, tick notification payload, toast-to-tray fallback, notification failure not marking reminders delivered, exact HKCU value name `DesktopTodoList`, write failure reporting, focus order, accessible names/roles/states, and virtual-row identity stability.
 
-- [ ] **Step 2: Run focused tests and confirm failure**
+- [x] **Step 2: Run focused tests and confirm failure**
 
   Run: `ctest --preset windows-x64-debug -R "notification|autostart|accessibility" --output-on-failure`.
 
-- [ ] **Step 3: Implement adapters, settings panel, and UI Automation surface**
+- [x] **Step 3: Implement adapters, settings panel, and UI Automation surface**
 
   Mark `remindedAt` only after at least one notification channel reports success. Registry access remains HKCU-only and errors must return to the settings panel from Task 8.
 
-- [ ] **Step 4: Run tests and Windows accessibility smoke checks**
+- [x] **Step 4: Run tests and Windows accessibility smoke checks**
 
-  Expected: automated tests pass; Narrator/Inspect checks are recorded as PASS or environment SKIP.
+  Expected: automated tests pass; Narrator/Inspect checks are recorded as PASS or environment SKIP. **PASS:** hidden native widget smoke test verifies the `WM_GETOBJECT` UIA fragment root and all 28 CTest targets pass. **SKIP:** Narrator/Inspect visual validation is deferred because the existing older application instance is active and no separate interactive desktop session is available.
 
 - [ ] **Step 5: Commit**
 

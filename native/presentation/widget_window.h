@@ -11,6 +11,7 @@
 #include "domain/types.h"
 #include "presentation/pointer_controller.h"
 #include "presentation/selection_toolbar.h"
+#include "presentation/accessibility_provider.h"
 #include "presentation/view_model.h"
 
 namespace desktop_todo {
@@ -58,6 +59,7 @@ private:
     void handle_pointer_action(const PointerAction& action);
     void handle_toolbar_action(SelectionToolbarAction action);
     void update_selection_toolbar();
+    [[nodiscard]] AccessibilityTree accessibility_snapshot() const;
     void cancel_pointer_gesture();
     [[nodiscard]] LRESULT hit_test(POINT screen) const;
 
@@ -68,6 +70,7 @@ private:
     std::unique_ptr<PointerController> pointer_controller_;
     std::unique_ptr<TextEditor> text_editor_;
     std::unique_ptr<SelectionToolbar> selection_toolbar_;
+    std::unique_ptr<AccessibilityProvider> accessibility_provider_;
     HWND window_ = nullptr;
     UINT dpi_ = 96;
     ViewKind current_view_ = ViewKind::today;

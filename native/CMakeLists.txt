@@ -22,6 +22,8 @@ add_library(desktop_todo_core STATIC
   platform/windows/tray_icon.cpp
   platform/windows/hotkey_service.cpp
   platform/windows/window_behavior.cpp
+  platform/windows/notification_service.cpp
+  platform/windows/autostart_service.cpp
   presentation/details_panel.cpp
   presentation/editor_session.cpp
   presentation/layout.cpp
@@ -29,12 +31,13 @@ add_library(desktop_todo_core STATIC
   presentation/selection_toolbar.cpp
   presentation/settings_panel.cpp
   presentation/data_transfer_dialog.cpp
+  presentation/accessibility_provider.cpp
   presentation/task_list_view.cpp
   presentation/theme.cpp
   presentation/view_model.cpp
 )
 target_include_directories(desktop_todo_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(desktop_todo_core PUBLIC desktop_todo_options Advapi32 Comctl32 Shell32 Comdlg32 WindowsApp)
+target_link_libraries(desktop_todo_core PUBLIC desktop_todo_options Advapi32 Comctl32 Shell32 Comdlg32 WindowsApp Uiautomationcore)
 
 add_executable(DesktopTodoList WIN32
   app/application.cpp

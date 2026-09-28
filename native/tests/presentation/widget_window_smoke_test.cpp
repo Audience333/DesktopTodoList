@@ -8,6 +8,9 @@
 #include "presentation/text_editor.h"
 #include "presentation/widget_window.h"
 
+#include <oleacc.h>
+#include <UIAutomation.h>
+
 #include <algorithm>
 #include <string_view>
 
@@ -70,6 +73,8 @@ TEST_CASE(widget_window_smoke_creates_and_destroys_integrated_native_widget) {
     widget_pointer = &widget;
     EXPECT_TRUE(widget.create(GetModuleHandleW(nullptr), SW_HIDE));
     EXPECT_TRUE(widget.handle() != nullptr);
+    EXPECT_TRUE(SendMessageW(widget.handle(), WM_GETOBJECT, GetCurrentThreadId(),
+        UiaRootObjectId) != 0);
     EXPECT_TRUE(widget.toggle_visibility());
     UpdateWindow(widget.handle());
     EXPECT_TRUE(IsWindowVisible(widget.handle()) != FALSE);

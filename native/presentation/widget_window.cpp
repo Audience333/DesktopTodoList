@@ -18,6 +18,7 @@
 #include <cmath>
 #include <utility>
 #include <shellapi.h>
+#include <UIAutomation.h>
 #include <windowsx.h>
 
 namespace desktop_todo {
@@ -117,6 +118,8 @@ bool WidgetWindow::create(HINSTANCE instance, int show_command) {
     if (!text_editor_->create(window_, dpi_)) return false;
     details_panel_ = std::make_unique<DetailsPanel>();
     if (!details_panel_->create(window_)) return false;
+    accessibility_provider_ = std::make_unique<AccessibilityProvider>(window_,
+        [this] { return accessibility_snapshot(); });
     text_editor_->layout(current_layout(window_, dpi_), dpi_);
     clamp_to_monitor();
     SetTimer(window_, kMaintenanceTimer, 250, nullptr);
@@ -131,6 +134,7 @@ void WidgetWindow::destroy() {
     text_editor_.reset();
     pointer_controller_.reset();
     selection_toolbar_.reset();
+    accessibility_provider_.reset();
     if (details_panel_) details_panel_->destroy();
     details_panel_.reset();
     if (window_ != nullptr) DestroyWindow(window_);
@@ -215,6 +219,10 @@ LRESULT CALLBACK WidgetWindow::window_proc(
 
 LRESULT WidgetWindow::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
+    case WM_GETOBJECT:
+        if (accessibility_provider_ && static_cast<LONG>(lparam) == UiaRootObjectId)
+            return accessibility_provider_->handle_get_object(wparam, lparam);
+        break;
     case WM_DROPFILES: {
         const auto drop = reinterpret_cast<HDROP>(wparam);
         const auto count = DragQueryFileW(drop, 0xFFFFFFFF, nullptr, 0);
@@ -804,6 +812,56 @@ void WidgetWindow::handle_toolbar_action(SelectionToolbarAction action) {
 void WidgetWindow::update_selection_toolbar() {
     if (!selection_toolbar_) return;
     selection_toolbar_->update(service_.selection().snapshot().selected_ids, visible_task_ids());
+}
+
+AccessibilityTree WidgetWindow::accessibility_snapshot() const {
+    AccessibilityTreeInput input;
+    input.current_view = current_view_;
+    const auto focus = GetFocus();
+    if (text_editor_ && focus == text_editor_->active_handle()) {
+        if (text_editor_->active_control() == NativeEditorControl::quick_add) input.focused_id = L"new-task";
+        else if (text_editor_->active_control() == NativeEditorControl::search) input.focused_id = L"search";
+        else if (text_editor_->active_control() == NativeEditorControl::inline_title)
+            input.focused_id = text_editor_->session_target_id();
+    }
+    if (input.focused_id.empty()) {
+        const auto selected = service_.selection().snapshot();
+        if (selected.focus_id) input.focused_id = *selected.focus_id;
+    }
+
+    POINT origin{};
+    ClientToScreen(window_, &origin);
+    const auto scale = static_cast<float>(dpi_) / 96.0F;
+    const auto to_screen = [origin, scale](RectF bounds) {
+        return RectF{static_cast<float>(origin.x) + bounds.x * scale,
+            static_cast<float>(origin.y) + bounds.y * scale,
+            bounds.width * scale, bounds.height * scale};
+    };
+    const auto layout = current_layout(window_, dpi_);
+    input.task_rows.reserve(view_model_.rows.size());
+    const auto selected = service_.selection().snapshot().selected_ids;
+    const auto visible = calculate_visible_range(
+        scroll_y_, layout.task_list.height, 58.0F, view_model_.rows.size(), 2);
+    for (auto index = visible.first; index < visible.last; ++index) {
+        const auto& row = view_model_.rows[index];
+        const auto bounds = RectF{layout.task_list.x,
+            layout.task_list.y + static_cast<float>(index) * 58.0F - scroll_y_,
+            layout.task_list.width, 58.0F};
+        input.task_rows.push_back({row.id, row.title,
+            row.status == TaskStatus::done,
+            std::find(selected.begin(), selected.end(), row.id) != selected.end(),
+            to_screen(bounds)});
+    }
+    auto tree = build_accessibility_tree(input);
+    tree.children[0].bounds = to_screen(layout.quick_add);
+    tree.children[1].bounds = to_screen({layout.logical_client.width - 210, 15, 190, 28});
+    constexpr ViewKind views[]{ViewKind::today, ViewKind::week, ViewKind::all, ViewKind::done};
+    for (std::size_t index = 0; index < std::size(views); ++index) {
+        tree.children[index + 2].bounds = to_screen({layout.tabs.x + layout.tabs.width *
+            static_cast<float>(index) / 4.0F, layout.tabs.y, layout.tabs.width / 4.0F,
+            layout.tabs.height});
+    }
+    return tree;
 }
 
 void WidgetWindow::cancel_pointer_gesture() {

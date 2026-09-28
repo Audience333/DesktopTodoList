@@ -29,6 +29,8 @@ constexpr int kCancel = 12;
 constexpr int kImport = 13;
 constexpr int kExport = 14;
 constexpr int kReset = 15;
+constexpr int kAutoStart = 16;
+constexpr int kStartMinimized = 17;
 
 void add_combo_item(HWND control, const wchar_t* text, int selected) {
     const auto index = static_cast<int>(SendMessageW(control, CB_ADDSTRING, 0,
@@ -76,6 +78,7 @@ SettingsApplyResult commit_settings_draft(
     bool recovery_hotkey_changed = false;
     bool layer_changed = false;
     bool click_through_changed = false;
+    bool auto_start_changed = false;
     bool rollback_complete = true;
     const auto restore_hotkeys = [&] {
         if (recovery_hotkey_changed) {
@@ -121,7 +124,20 @@ SettingsApplyResult commit_settings_draft(
         }
         click_through_changed = true;
     }
+    if (draft.auto_start != current.auto_start) {
+        if (!api.set_auto_start || !api.set_auto_start(draft.auto_start)) {
+            if (click_through_changed)
+                rollback_complete = api.set_click_through(!current.selectable) && rollback_complete;
+            if (layer_changed)
+                rollback_complete = api.set_layer(current.window_layer) && rollback_complete;
+            restore_hotkeys();
+            return failed(L"开机启动设置写入失败，其他更改已回滚。请检查当前用户的注册表写入权限。");
+        }
+        auto_start_changed = true;
+    }
     if (!api.save || !api.save(draft)) {
+        if (auto_start_changed)
+            rollback_complete = api.set_auto_start(current.auto_start) && rollback_complete;
         if (click_through_changed)
             rollback_complete = api.set_click_through(!current.selectable) && rollback_complete;
         if (layer_changed)
@@ -152,15 +168,15 @@ bool SettingsPanel::show_modal(
     window_ = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_DLGMODALFRAME,
         kSettingsClass, L"DesktopTodoList 设置",
         WS_CAPTION | WS_SYSMENU | WS_POPUP,
-        CW_USEDEFAULT, CW_USEDEFAULT, 500, 610, owner_, nullptr,
+        CW_USEDEFAULT, CW_USEDEFAULT, 500, 660, owner_, nullptr,
         window_class.hInstance, this);
     if (window_ == nullptr) return false;
     create_controls();
     RECT bounds{};
     if (owner_ != nullptr && GetWindowRect(owner_, &bounds)) {
         const auto x = bounds.left + ((bounds.right - bounds.left) - 500) / 2;
-        const auto y = bounds.top + ((bounds.bottom - bounds.top) - 610) / 2;
-        SetWindowPos(window_, HWND_TOP, x, y, 500, 610, SWP_SHOWWINDOW);
+        const auto y = bounds.top + ((bounds.bottom - bounds.top) - 660) / 2;
+        SetWindowPos(window_, HWND_TOP, x, y, 500, 660, SWP_SHOWWINDOW);
     } else {
         ShowWindow(window_, SW_SHOWNORMAL);
     }
@@ -278,21 +294,27 @@ void SettingsPanel::create_controls() {
     make_check(kRubberBand, 406, L"启用框选");
     SendMessageW(controls_[kRubberBand], BM_SETCHECK,
         initial_.rubber_band_select ? BST_CHECKED : BST_UNCHECKED, 0);
+    make_check(kAutoStart, 436, L"登录 Windows 时自动启动");
+    make_check(kStartMinimized, 466, L"启动时最小化到通知区域");
+    SendMessageW(controls_[kAutoStart], BM_SETCHECK,
+        initial_.auto_start ? BST_CHECKED : BST_UNCHECKED, 0);
+    SendMessageW(controls_[kStartMinimized], BM_SETCHECK,
+        initial_.start_minimized ? BST_CHECKED : BST_UNCHECKED, 0);
 
     controls_[kImport] = CreateWindowExW(0, L"BUTTON", L"导入 JSON…",
-        WS_CHILD | WS_VISIBLE | WS_TABSTOP, 18, 452, 132, 30, window_,
+        WS_CHILD | WS_VISIBLE | WS_TABSTOP, 18, 510, 132, 30, window_,
         reinterpret_cast<HMENU>(kControlIdBase + kImport), GetModuleHandleW(nullptr), nullptr);
     controls_[kExport] = CreateWindowExW(0, L"BUTTON", L"导出 JSON…",
-        WS_CHILD | WS_VISIBLE | WS_TABSTOP, 158, 452, 132, 30, window_,
+        WS_CHILD | WS_VISIBLE | WS_TABSTOP, 158, 510, 132, 30, window_,
         reinterpret_cast<HMENU>(kControlIdBase + kExport), GetModuleHandleW(nullptr), nullptr);
     controls_[kReset] = CreateWindowExW(0, L"BUTTON", L"重置数据…",
-        WS_CHILD | WS_VISIBLE | WS_TABSTOP, 298, 452, 162, 30, window_,
+        WS_CHILD | WS_VISIBLE | WS_TABSTOP, 298, 510, 162, 30, window_,
         reinterpret_cast<HMENU>(kControlIdBase + kReset), GetModuleHandleW(nullptr), nullptr);
     controls_[kSave] = CreateWindowExW(0, L"BUTTON", L"保存设置",
-        WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON, 264, 510, 96, 32,
+        WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON, 264, 558, 96, 32,
         window_, reinterpret_cast<HMENU>(kControlIdBase + kSave), GetModuleHandleW(nullptr), nullptr);
     controls_[kCancel] = CreateWindowExW(0, L"BUTTON", L"取消",
-        WS_CHILD | WS_VISIBLE | WS_TABSTOP, 364, 510, 96, 32, window_,
+        WS_CHILD | WS_VISIBLE | WS_TABSTOP, 364, 558, 96, 32, window_,
         reinterpret_cast<HMENU>(kControlIdBase + kCancel), GetModuleHandleW(nullptr), nullptr);
     update_controls(initial_);
 }
@@ -318,6 +340,10 @@ void SettingsPanel::update_controls(const Settings& settings) {
         settings.multi_select_enabled ? BST_CHECKED : BST_UNCHECKED, 0);
     SendMessageW(controls_[kRubberBand], BM_SETCHECK,
         settings.rubber_band_select ? BST_CHECKED : BST_UNCHECKED, 0);
+    SendMessageW(controls_[kAutoStart], BM_SETCHECK,
+        settings.auto_start ? BST_CHECKED : BST_UNCHECKED, 0);
+    SendMessageW(controls_[kStartMinimized], BM_SETCHECK,
+        settings.start_minimized ? BST_CHECKED : BST_UNCHECKED, 0);
 }
 
 Settings SettingsPanel::read_draft() const {
@@ -346,6 +372,8 @@ Settings SettingsPanel::read_draft() const {
     draft.click_through_timeout_minutes = selected(kTimeout) == 1 ? 30 : 0;
     draft.multi_select_enabled = SendMessageW(controls_[kMultiSelect], BM_GETCHECK, 0, 0) == BST_CHECKED;
     draft.rubber_band_select = SendMessageW(controls_[kRubberBand], BM_GETCHECK, 0, 0) == BST_CHECKED;
+    draft.auto_start = SendMessageW(controls_[kAutoStart], BM_GETCHECK, 0, 0) == BST_CHECKED;
+    draft.start_minimized = SendMessageW(controls_[kStartMinimized], BM_GETCHECK, 0, 0) == BST_CHECKED;
     return draft;
 }
 

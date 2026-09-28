@@ -13,6 +13,8 @@ add_executable(desktop_todo_tests
   platform/tray_menu_test.cpp
   platform/hotkey_service_test.cpp
   platform/window_behavior_test.cpp
+  platform/notification_service_test.cpp
+  platform/autostart_service_test.cpp
   presentation/layout_test.cpp
   presentation/renderer_smoke_test.cpp
   presentation/renderer_state_test.cpp
@@ -22,6 +24,7 @@ add_executable(desktop_todo_tests
   presentation/widget_window_smoke_test.cpp
   presentation/settings_panel_test.cpp
   presentation/data_transfer_dialog_test.cpp
+  presentation/accessibility_test.cpp
   presentation/pointer_controller_test.cpp
 )
 
@@ -64,3 +67,6 @@ add_test(NAME native.pointer_controller COMMAND desktop_todo_tests --filter poin
 add_test(NAME native.selection_toolbar COMMAND desktop_todo_tests --filter selection_toolbar_)
 add_test(NAME native.settings_panel COMMAND desktop_todo_tests --filter settings_panel_)
 add_test(NAME native.data_transfer_dialog COMMAND desktop_todo_tests --filter data_transfer_dialog_)
+add_test(NAME native.notification_service COMMAND desktop_todo_tests --filter notification_service_)
+add_test(NAME native.autostart_service COMMAND desktop_todo_tests --filter autostart_service_)
+add_test(NAME native.accessibility COMMAND desktop_todo_tests --filter accessibility_)
