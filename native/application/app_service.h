@@ -81,6 +81,7 @@ private:
     std::optional<Clock::time_point> save_due_;
     std::optional<LocalDate> last_backup_date_;
     bool writes_blocked_ = false;
+    bool recovery_replacement_pending_ = false;
 };
 
 }  // namespace desktop_todo

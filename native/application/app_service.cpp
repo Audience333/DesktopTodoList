@@ -5,6 +5,24 @@
 #include <utility>
 
 namespace desktop_todo {
+namespace {
+
+AppState merge_recovered_with_pending(AppState recovered, AppState pending) {
+    for (auto& task : pending.tasks) {
+        const auto existing = std::find_if(
+            recovered.tasks.begin(), recovered.tasks.end(), [&task](const Task& candidate) {
+                return candidate.id == task.id;
+            });
+        if (existing == recovered.tasks.end()) {
+            recovered.tasks.push_back(std::move(task));
+        } else if (task.updated_at > existing->updated_at) {
+            *existing = std::move(task);
+        }
+    }
+    return recovered;
+}
+
+}  // namespace
 
 AppService::AppService(
     StateRepository& repository,
@@ -22,6 +40,7 @@ bool AppService::start() {
     auto load_issues = loaded.issues;
     const auto preserved_source = loaded.preserved_source;
     writes_blocked_ = !loaded.writable;
+    recovery_replacement_pending_ = false;
     recreate_store(std::move(loaded.state));
     const auto today = today_();
     if (!writes_blocked_) {
@@ -116,6 +135,9 @@ bool AppService::accept_import(ImportResult result) {
         }
     }
     recreate_store(std::move(*result.candidate));
+    if (writes_blocked_ && result.mode == ImportMode::replace) {
+        recovery_replacement_pending_ = true;
+    }
     dirty_ = true;
     save_due_ = now_() + std::chrono::milliseconds{500};
     emit({AppEventType::state_changed});
@@ -134,6 +156,7 @@ bool AppService::reset_to_defaults(bool confirmed) {
         return false;
     }
     recreate_store(AppState{});
+    if (writes_blocked_) recovery_replacement_pending_ = true;
     dirty_ = true;
     save_due_ = now_() + std::chrono::milliseconds{500};
     emit({AppEventType::state_changed});
@@ -173,7 +196,35 @@ bool AppService::maintenance() {
             emit({AppEventType::save_error, {}, {}, preserved.error});
             return false;
         }
+
+        auto pending = store_->state();
+        const auto had_pending_changes = dirty_;
+        auto recovered = repository_.load();
+        if (!recovered.writable) {
+            emit({AppEventType::save_error, {}, {}, recovered.error});
+            return false;
+        }
+        const auto recovery_status = recovered.status;
+        const auto recovery_error = recovered.error;
+        auto recovery_issues = recovered.issues;
+        auto reconciled = recovery_replacement_pending_
+            ? std::move(pending)
+            : had_pending_changes
+                ? merge_recovered_with_pending(std::move(recovered.state), std::move(pending))
+                : std::move(recovered.state);
+        recreate_store(std::move(reconciled));
+        dirty_ = had_pending_changes || !recovery_error.empty();
+        save_due_ = dirty_ ? std::optional<Clock::time_point>{now_()} : std::nullopt;
         writes_blocked_ = false;
+        recovery_replacement_pending_ = false;
+
+        AppEvent recovery_event;
+        recovery_event.type = AppEventType::recovery;
+        recovery_event.message = recovery_error;
+        recovery_event.load_status = recovery_status;
+        recovery_event.issues = std::move(recovery_issues);
+        recovery_event.preserved_source = preserved.path;
+        emit(std::move(recovery_event));
     }
     const auto today = today_();
     if (!last_backup_date_.has_value() || *last_backup_date_ != today) {
