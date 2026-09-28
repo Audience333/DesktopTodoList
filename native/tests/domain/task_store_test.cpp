@@ -70,6 +70,17 @@ TEST_CASE(task_store_empty_title_is_rejected_without_undo) {
     EXPECT_TRUE(!fixture.store.take_change().persisted);
 }
 
+TEST_CASE(task_store_persists_close_to_tray_setting_as_a_state_change) {
+    StoreFixture fixture;
+
+    EXPECT_TRUE(fixture.store.set_close_to_tray(false));
+    EXPECT_TRUE(!fixture.store.state().settings.close_to_tray);
+    const auto change = fixture.store.take_change();
+    EXPECT_TRUE(change.persisted);
+    EXPECT_TRUE(change.affected_ids.empty());
+    EXPECT_TRUE(!fixture.store.set_close_to_tray(false));
+}
+
 TEST_CASE(task_store_newest_task_uses_smallest_order) {
     Clock::time_point now{std::chrono::milliseconds{1'800'000'000'000}};
     int next_id = 1;

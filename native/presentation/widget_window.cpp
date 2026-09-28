@@ -3,6 +3,7 @@
 #include "application/app_service.h"
 #include "domain/commands.h"
 #include "platform/windows/window_class.h"
+#include "platform/windows/tray_icon.h"
 #include "presentation/details_panel.h"
 #include "presentation/layout.h"
 #include "presentation/renderer.h"
@@ -112,7 +113,7 @@ bool WidgetWindow::create(HINSTANCE instance, int show_command) {
     text_editor_->layout(current_layout(window_, dpi_), dpi_);
     clamp_to_monitor();
     SetTimer(window_, kMaintenanceTimer, 250, nullptr);
-    ShowWindow(window_, show_command == SW_HIDE ? SW_SHOWNORMAL : show_command);
+    ShowWindow(window_, show_command);
     UpdateWindow(window_);
     return true;
 }
@@ -142,6 +143,24 @@ void WidgetWindow::show_and_activate() {
         FLASHWINFO flash{sizeof(flash), window_, FLASHW_TRAY | FLASHW_TIMERNOFG, 3, 0};
         FlashWindowEx(&flash);
     }
+}
+
+void WidgetWindow::hide_to_tray() {
+    if (window_ != nullptr) ShowWindow(window_, SW_HIDE);
+}
+
+bool WidgetWindow::toggle_visibility() {
+    if (window_ == nullptr) return false;
+    if (IsWindowVisible(window_)) {
+        hide_to_tray();
+        return false;
+    }
+    show_and_activate();
+    return true;
+}
+
+void WidgetWindow::begin_new_task() {
+    if (text_editor_) text_editor_->begin_new_task();
 }
 
 HWND WidgetWindow::handle() const noexcept { return window_; }
@@ -434,7 +453,12 @@ LRESULT WidgetWindow::handle_message(UINT message, WPARAM wparam, LPARAM lparam)
     case WM_ERASEBKGND:
         return 1;
     case WM_CLOSE:
-        DestroyWindow(window_);
+        if (close_disposition(service_.snapshot().settings.close_to_tray) ==
+            CloseDisposition::hide_to_tray) {
+            hide_to_tray();
+        } else {
+            DestroyWindow(window_);
+        }
         return 0;
     case WM_DESTROY:
         cancel_pointer_gesture();

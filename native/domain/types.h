@@ -50,6 +50,7 @@ struct Settings {
     int remind_advance_minutes = 0;
     bool auto_start = false;
     bool start_minimized = false;
+    bool close_to_tray = true;
     WindowMode window_mode = WindowMode::normal;
     WindowLayer window_layer = WindowLayer::normal;
     bool selectable = true;

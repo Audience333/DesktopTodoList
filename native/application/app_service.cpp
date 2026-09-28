@@ -158,6 +158,12 @@ bool AppService::accept_import(ImportResult result) {
     return true;
 }
 
+bool AppService::set_close_to_tray(bool enabled) {
+    const auto changed = store_->set_close_to_tray(enabled);
+    collect_change();
+    return changed;
+}
+
 ExportResult AppService::export_to(const std::filesystem::path& destination) const {
     return repository_.export_to(destination, store_->state());
 }

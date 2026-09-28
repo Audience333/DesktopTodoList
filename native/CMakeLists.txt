@@ -19,6 +19,8 @@ add_library(desktop_todo_core STATIC
   persistence/state_repository.cpp
   persistence/win32_file_system.cpp
   platform/windows/single_instance.cpp
+  platform/windows/tray_icon.cpp
+  platform/windows/hotkey_service.cpp
   presentation/details_panel.cpp
   presentation/editor_session.cpp
   presentation/layout.cpp
@@ -29,7 +31,7 @@ add_library(desktop_todo_core STATIC
   presentation/view_model.cpp
 )
 target_include_directories(desktop_todo_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(desktop_todo_core PUBLIC desktop_todo_options Advapi32 Comctl32 WindowsApp)
+target_link_libraries(desktop_todo_core PUBLIC desktop_todo_options Advapi32 Comctl32 Shell32 WindowsApp)
 
 add_executable(DesktopTodoList WIN32
   app/application.cpp

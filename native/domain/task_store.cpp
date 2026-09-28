@@ -260,6 +260,13 @@ bool TaskStore::mark_reminded(
     return true;
 }
 
+bool TaskStore::set_close_to_tray(bool enabled) {
+    if (state_.settings.close_to_tray == enabled) return false;
+    state_.settings.close_to_tray = enabled;
+    record_change({});
+    return true;
+}
+
 bool TaskStore::can_undo() {
     expire_undo();
     return undo_.has_value();

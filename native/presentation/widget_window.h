@@ -32,6 +32,9 @@ public:
     void destroy();
     void invalidate();
     void show_and_activate();
+    void hide_to_tray();
+    [[nodiscard]] bool toggle_visibility();
+    void begin_new_task();
     [[nodiscard]] HWND handle() const noexcept;
 
 private:

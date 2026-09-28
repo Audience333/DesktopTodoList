@@ -70,8 +70,13 @@ TEST_CASE(widget_window_smoke_creates_and_destroys_integrated_native_widget) {
     widget_pointer = &widget;
     EXPECT_TRUE(widget.create(GetModuleHandleW(nullptr), SW_HIDE));
     EXPECT_TRUE(widget.handle() != nullptr);
-    widget.show_and_activate();
+    EXPECT_TRUE(widget.toggle_visibility());
     UpdateWindow(widget.handle());
+    EXPECT_TRUE(IsWindowVisible(widget.handle()) != FALSE);
+    SendMessageW(widget.handle(), WM_CLOSE, 0, 0);
+    EXPECT_TRUE(IsWindow(widget.handle()) != FALSE);
+    EXPECT_TRUE(IsWindowVisible(widget.handle()) == FALSE);
+    EXPECT_TRUE(widget.toggle_visibility());
     EXPECT_TRUE(IsWindowVisible(widget.handle()) != FALSE);
     PostMessageW(widget.handle(), desktop_todo::kEditorNewTaskMessage, 0, 0);
     drain_messages();

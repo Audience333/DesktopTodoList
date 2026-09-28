@@ -27,6 +27,7 @@ public:
     bool mark_reminded(
         const std::vector<std::wstring>& ids,
         Clock::time_point delivered_at);
+    bool set_close_to_tray(bool enabled);
 
     [[nodiscard]] bool can_undo();
     bool undo();

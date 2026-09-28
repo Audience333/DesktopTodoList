@@ -187,6 +187,7 @@ void decode_settings(const JsonObject& object, Settings& settings) {
     settings.remind_advance_minutes = static_cast<int>(named_number(object, L"remindAdvanceMinutes", 0));
     settings.auto_start = named_bool(object, L"autoStart", false);
     settings.start_minimized = named_bool(object, L"startMinimized", false);
+    settings.close_to_tray = named_bool(object, L"closeToTray", true);
     settings.window_mode = named_string(object, L"windowMode", L"normal") == L"floating" ?
         WindowMode::floating : WindowMode::normal;
     const auto layer = named_string(object, L"windowLayer", L"normal");
@@ -252,6 +253,7 @@ JsonObject encode_settings(const Settings& settings) {
     put(object, L"hotkeySelectable", settings.selectable_hotkey); put(object, L"weekStartsOn", static_cast<double>(settings.week_starts_on));
     put(object, L"remindAdvanceMinutes", static_cast<double>(settings.remind_advance_minutes));
     put(object, L"autoStart", settings.auto_start); put(object, L"startMinimized", settings.start_minimized);
+    put(object, L"closeToTray", settings.close_to_tray);
     put(object, L"windowMode", settings.window_mode == WindowMode::floating ? L"floating" : L"normal");
     put(object, L"windowLayer", settings.window_layer == WindowLayer::top ? L"top" : settings.window_layer == WindowLayer::bottom ? L"bottom" : L"normal");
     put(object, L"selectable", settings.selectable);

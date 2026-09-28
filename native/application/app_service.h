@@ -55,6 +55,7 @@ public:
         std::span<const std::byte> source,
         ImportMode mode) const;
     bool accept_import(ImportResult result);
+    bool set_close_to_tray(bool enabled);
     [[nodiscard]] ExportResult export_to(const std::filesystem::path& destination) const;
     bool reset_to_defaults(bool confirmed);
     [[nodiscard]] ReminderBatch tick_reminders();

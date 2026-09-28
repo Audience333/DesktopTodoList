@@ -48,6 +48,7 @@ AppState representative_state() {
     state.settings.default_filter = ViewKind::all;
     state.settings.window_mode = WindowMode::floating;
     state.settings.window_layer = WindowLayer::top;
+    state.settings.close_to_tray = false;
     state.settings.remind_advance_minutes = 10;
     state.settings.floating_geometry.x = 20.0;
     state.settings.floating_geometry.y = 30.0;
@@ -60,6 +61,9 @@ TEST_CASE(json_codec_round_trip_preserves_schema_chinese_emoji_and_crlf) {
     const auto original = representative_state();
 
     const auto encoded = desktop_todo::encode_state_utf8(original);
+    const std::string encoded_text{
+        reinterpret_cast<const char*>(encoded.data()), encoded.size()};
+    EXPECT_TRUE(encoded_text.find("\"closeToTray\":false") != std::string::npos);
     const auto decoded = desktop_todo::decode_state_utf8(encoded);
 
     EXPECT_TRUE(decoded.state.has_value());
@@ -73,6 +77,7 @@ TEST_CASE(json_codec_round_trip_preserves_schema_chinese_emoji_and_crlf) {
     EXPECT_EQ(decoded.state->tasks[0].reminded_at, original.tasks[0].reminded_at);
     EXPECT_EQ(decoded.state->settings.theme, Theme::dark);
     EXPECT_EQ(decoded.state->settings.window_mode, WindowMode::floating);
+    EXPECT_TRUE(!decoded.state->settings.close_to_tray);
 }
 
 TEST_CASE(json_codec_ignores_unknown_fields_and_loads_fixture) {
@@ -131,6 +136,7 @@ TEST_CASE(json_codec_preserves_legacy_schema_v1_setting_names) {
 
     EXPECT_TRUE(decoded.state.has_value());
     EXPECT_EQ(decoded.state->settings.selectable_hotkey, L"Ctrl+Shift+K");
+    EXPECT_TRUE(decoded.state->settings.close_to_tray);
     EXPECT_EQ(decoded.state->settings.floating_geometry.width, 444.0);
     EXPECT_EQ(decoded.state->settings.floating_geometry.height, 555.0);
     const auto encoded = desktop_todo::encode_state_utf8(*decoded.state);
