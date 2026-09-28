@@ -51,6 +51,7 @@ struct Settings {
     bool auto_start = false;
     bool start_minimized = false;
     bool close_to_tray = true;
+    int click_through_timeout_minutes = 0;
     WindowMode window_mode = WindowMode::normal;
     WindowLayer window_layer = WindowLayer::normal;
     bool selectable = true;
@@ -80,6 +81,7 @@ enum class ValidationIssueCode {
     invalid_default_filter,
     invalid_window_mode,
     invalid_window_layer,
+    invalid_click_through_timeout,
     invalid_week_start,
     invalid_reminder_advance,
     invalid_geometry,

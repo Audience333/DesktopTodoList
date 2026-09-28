@@ -5,6 +5,8 @@
 #include <windows.h>
 
 #include <memory>
+#include <functional>
+#include <filesystem>
 
 #include "domain/types.h"
 #include "presentation/pointer_controller.h"
@@ -35,6 +37,8 @@ public:
     void hide_to_tray();
     [[nodiscard]] bool toggle_visibility();
     void begin_new_task();
+    void set_file_drop_handler(std::function<void(const std::filesystem::path&)> handler);
+    void apply_settings(const Settings& settings);
     [[nodiscard]] bool set_click_through(bool enabled);
     [[nodiscard]] HWND handle() const noexcept;
 
@@ -73,6 +77,7 @@ private:
     std::wstring details_task_id_;
     bool details_batch_ = false;
     std::optional<RectF> selection_band_;
+    std::function<void(const std::filesystem::path&)> file_drop_handler_;
 };
 
 }  // namespace desktop_todo

@@ -5,6 +5,7 @@
 #include "platform/windows/window_class.h"
 #include "platform/windows/tray_icon.h"
 #include "platform/windows/window_behavior.h"
+#include "presentation/data_transfer_dialog.h"
 #include "presentation/details_panel.h"
 #include "presentation/layout.h"
 #include "presentation/renderer.h"
@@ -16,6 +17,7 @@
 #include <chrono>
 #include <cmath>
 #include <utility>
+#include <shellapi.h>
 #include <windowsx.h>
 
 namespace desktop_todo {
@@ -103,9 +105,13 @@ bool WidgetWindow::create(HINSTANCE instance, int show_command) {
         static_cast<int>(size.width), static_cast<int>(size.height),
         nullptr, nullptr, instance, this);
     if (window_ == nullptr) return false;
+    DragAcceptFiles(window_, TRUE);
     dpi_ = GetDpiForWindow(window_);
     renderer_ = std::make_unique<Renderer>(window_);
     pointer_controller_ = std::make_unique<PointerController>(service_.selection());
+    current_view_ = service_.snapshot().settings.default_filter;
+    pointer_controller_->set_features(service_.snapshot().settings.multi_select_enabled,
+        service_.snapshot().settings.rubber_band_select);
     selection_toolbar_ = std::make_unique<SelectionToolbar>(service_);
     text_editor_ = std::make_unique<TextEditor>();
     if (!text_editor_->create(window_, dpi_)) return false;
@@ -164,6 +170,26 @@ void WidgetWindow::begin_new_task() {
     if (text_editor_) text_editor_->begin_new_task();
 }
 
+void WidgetWindow::set_file_drop_handler(
+    std::function<void(const std::filesystem::path&)> handler) {
+    file_drop_handler_ = std::move(handler);
+}
+
+void WidgetWindow::apply_settings(const Settings& settings) {
+    current_view_ = settings.default_filter;
+    scroll_y_ = 0;
+    view_model_ = {};
+    if (pointer_controller_) {
+        pointer_controller_->set_features(settings.multi_select_enabled,
+            settings.rubber_band_select);
+    }
+    if (!settings.multi_select_enabled) {
+        const auto selected = service_.selection().snapshot().selected_ids;
+        if (selected.size() > 1) service_.selection().select_one(selected.front());
+    }
+    invalidate();
+}
+
 bool WidgetWindow::set_click_through(bool enabled) {
     return apply_window_click_through(window_, enabled,
         service_.snapshot().settings.window_layer);
@@ -189,6 +215,28 @@ LRESULT CALLBACK WidgetWindow::window_proc(
 
 LRESULT WidgetWindow::handle_message(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
+    case WM_DROPFILES: {
+        const auto drop = reinterpret_cast<HDROP>(wparam);
+        const auto count = DragQueryFileW(drop, 0xFFFFFFFF, nullptr, 0);
+        if (count > 1) {
+            MessageBoxW(window_, L"一次只能导入一个 JSON 文件。", L"DesktopTodoList",
+                MB_OK | MB_ICONINFORMATION);
+        } else if (count == 1) {
+            const auto length = DragQueryFileW(drop, 0, nullptr, 0);
+            std::wstring path(static_cast<std::size_t>(length) + 1, L'\0');
+            DragQueryFileW(drop, 0, path.data(), length + 1);
+            path.resize(length);
+            const std::filesystem::path source{path};
+            if (!DataTransferDialog::accepts_json_path(source)) {
+                MessageBoxW(window_, L"只能拖入 .json 文件。", L"DesktopTodoList",
+                    MB_OK | MB_ICONWARNING);
+            } else if (file_drop_handler_) {
+                file_drop_handler_(source);
+            }
+        }
+        DragFinish(drop);
+        return 0;
+    }
     case WM_NCCALCSIZE:
         if (wparam != 0) return 0;
         break;

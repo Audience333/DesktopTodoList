@@ -37,6 +37,7 @@ struct PointerAction {
 class PointerController {
 public:
     explicit PointerController(SelectionModel& selection);
+    void set_features(bool multi_select_enabled, bool rubber_band_enabled) noexcept;
 
     [[nodiscard]] PointerAction press(
         RowHitArea area,
@@ -67,6 +68,8 @@ private:
     std::wstring source_id_;
     bool append_selection_ = false;
     bool capturing_ = false;
+    bool multi_select_enabled_ = true;
+    bool rubber_band_enabled_ = true;
     std::vector<std::wstring> initial_selection_;
 };
 

@@ -17,6 +17,15 @@ bool intersects(const RectF& left, const RectF& right) {
 
 PointerController::PointerController(SelectionModel& selection) : selection_(selection) {}
 
+void PointerController::set_features(bool multi_select_enabled, bool rubber_band_enabled) noexcept {
+    if (rubber_band_enabled_ && !rubber_band_enabled &&
+        (gesture_ == Gesture::blank_pending || gesture_ == Gesture::rubber_band)) {
+        cancel();
+    }
+    multi_select_enabled_ = multi_select_enabled;
+    rubber_band_enabled_ = rubber_band_enabled;
+}
+
 PointerAction PointerController::press(
     RowHitArea area,
     std::wstring_view task_id,
@@ -41,15 +50,16 @@ PointerAction PointerController::press(
         capturing_ = true;
         return {PointerActionKind::begin_drag, id};
     case RowHitArea::row:
-        if (shift) selection_.select_range(id, visible_ids, ctrl);
-        else if (ctrl) selection_.toggle(id);
+        if (multi_select_enabled_ && shift) selection_.select_range(id, visible_ids, ctrl);
+        else if (multi_select_enabled_ && ctrl) selection_.toggle(id);
         else selection_.select_one(id);
         return {PointerActionKind::selection_changed, id};
     case RowHitArea::none:
+        if (!rubber_band_enabled_) return {};
         gesture_ = Gesture::blank_pending;
         start_ = point;
         current_ = point;
-        append_selection_ = ctrl;
+        append_selection_ = multi_select_enabled_ && ctrl;
         initial_selection_ = selection_.snapshot().selected_ids;
         return {};
     }

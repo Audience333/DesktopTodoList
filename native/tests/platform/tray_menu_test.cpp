@@ -30,6 +30,7 @@ TEST_CASE(tray_menu_reflects_visibility_layer_and_interaction_state) {
     EXPECT_TRUE(!item(menu, TrayCommand::layer_normal).checked);
     EXPECT_TRUE(!item(menu, TrayCommand::toggle_interaction).checked);
     EXPECT_TRUE(item(menu, TrayCommand::toggle_close_behavior).checked);
+    EXPECT_TRUE(item(menu, TrayCommand::settings).enabled);
 }
 
 TEST_CASE(tray_menu_and_tooltip_expose_pending_count_and_click_through_state) {

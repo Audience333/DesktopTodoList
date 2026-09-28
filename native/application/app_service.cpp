@@ -176,6 +176,12 @@ bool AppService::set_selectable(bool enabled) {
     return changed;
 }
 
+bool AppService::update_settings(Settings settings) {
+    const auto changed = store_->update_settings(std::move(settings));
+    collect_change();
+    return changed;
+}
+
 ExportResult AppService::export_to(const std::filesystem::path& destination) const {
     return repository_.export_to(destination, store_->state());
 }

@@ -325,23 +325,23 @@
 - Consumes: settings/import/export/reset commands from Plan 1 and platform services from Tasks 6–7.
 - Produces: settings draft/validation/commit flow; native open/save dialogs; drag-and-drop JSON import; merge/replace confirmation; factory-reset confirmation.
 
-- [ ] **Step 1: Write failing settings and data-transfer tests**
+- [x] **Step 1: Write failing settings and data-transfer tests**
 
   Assert theme, default view, week start, close behavior, custom show/hide and recovery hotkeys, layer, click-through timeout, multi-select, rubber-band, and batch-toolbar settings. Assert failed hotkey registration rolls back the whole settings draft. Cover valid/invalid dropped JSON, merge/replace confirmation, canceled import leaving state untouched, export path errors, and factory reset requiring a second confirmation and creating a backup.
 
-- [ ] **Step 2: Run focused tests and confirm failure**
+- [x] **Step 2: Run focused tests and confirm failure**
 
   Run: `ctest --preset windows-x64-debug -R "settings_panel|data_transfer_dialog" --output-on-failure`.
 
-- [ ] **Step 3: Implement settings and native data-management dialogs**
+- [x] **Step 3: Implement settings and native data-management dialogs**
 
   Use Windows common open/save dialogs and `WM_DROPFILES` only for `.json` files. Validate the complete settings draft and all platform transitions before persisting it; show user-visible errors for rejected hotkeys, registry writes, imports, exports, and resets.
 
-- [ ] **Step 4: Run tests and interactive file-dialog/drop checks**
+- [x] **Step 4: Run tests and interactive file-dialog/drop checks**
 
-  Expected: all state tests pass; native dialog and drop checks report PASS or explicit environment SKIP.
+  Expected: all state tests pass; native dialog and drop checks report PASS or explicit environment SKIP. **SKIP:** live dialogs/drop were not opened because an older app instance was already running; launching the test build would signal that instance.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
   ```powershell
   git add native/presentation native/tests/presentation native/app

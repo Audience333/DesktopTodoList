@@ -58,6 +58,7 @@ public:
     bool set_close_to_tray(bool enabled);
     bool set_window_layer(WindowLayer layer);
     bool set_selectable(bool enabled);
+    bool update_settings(Settings settings);
     [[nodiscard]] ExportResult export_to(const std::filesystem::path& destination) const;
     bool reset_to_defaults(bool confirmed);
     [[nodiscard]] ReminderBatch tick_reminders();

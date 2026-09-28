@@ -63,7 +63,7 @@ std::vector<TrayMenuItem> build_tray_menu(const TrayMenuState& state) {
         state.interaction_enabled, state.interaction_toggle_available, true});
     items.push_back({TrayCommand::toggle_close_behavior, L"关闭时收起到托盘",
         state.close_to_tray, true, true});
-    items.push_back({TrayCommand::settings, L"设置", false, false, true});
+    items.push_back({TrayCommand::settings, L"设置", false, true, true});
     items.push_back({TrayCommand::exit_application, L"退出", false, true, true});
     return items;
 }

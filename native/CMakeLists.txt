@@ -27,12 +27,14 @@ add_library(desktop_todo_core STATIC
   presentation/layout.cpp
   presentation/pointer_controller.cpp
   presentation/selection_toolbar.cpp
+  presentation/settings_panel.cpp
+  presentation/data_transfer_dialog.cpp
   presentation/task_list_view.cpp
   presentation/theme.cpp
   presentation/view_model.cpp
 )
 target_include_directories(desktop_todo_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(desktop_todo_core PUBLIC desktop_todo_options Advapi32 Comctl32 Shell32 WindowsApp)
+target_link_libraries(desktop_todo_core PUBLIC desktop_todo_options Advapi32 Comctl32 Shell32 Comdlg32 WindowsApp)
 
 add_executable(DesktopTodoList WIN32
   app/application.cpp

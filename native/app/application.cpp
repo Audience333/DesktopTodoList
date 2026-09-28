@@ -8,6 +8,8 @@
 #include "platform/windows/tray_icon.h"
 #include "platform/windows/window_behavior.h"
 #include "platform/windows/window_class.h"
+#include "presentation/data_transfer_dialog.h"
+#include "presentation/settings_panel.h"
 #include "presentation/widget_window.h"
 
 #include <shellapi.h>
@@ -129,6 +131,9 @@ public:
             cleanup_windows();
             return 6;
         }
+        widget_->set_file_drop_handler([this](const std::filesystem::path& path) {
+            import_file(path, widget_ ? widget_->handle() : nullptr);
+        });
         tray_ = std::make_unique<TrayIcon>(message_, kTrayCallbackMessage);
         if (!tray_->install()) {
             MessageBoxW(nullptr, L"无法注册通知区域图标。为避免窗口收起后无法找回，程序已停止启动。",
@@ -168,7 +173,9 @@ public:
                     HotkeyAction::toggle_interaction).has_value();
             },
             [] { return std::chrono::steady_clock::now(); }});
-        window_behavior_->set_auto_restore(std::nullopt);
+        const auto timeout = service_.snapshot().settings.click_through_timeout_minutes;
+        window_behavior_->set_auto_restore(timeout == 30
+            ? std::optional{std::chrono::minutes{30}} : std::nullopt);
         if (!window_behavior_->initialize(service_.snapshot().settings.window_layer,
                 !service_.snapshot().settings.selectable)) {
             static_cast<void>(service_.set_selectable(true));
@@ -365,10 +372,171 @@ private:
             widget_->destroy();
             break;
         case TrayCommand::pending_count:
+            break;
         case TrayCommand::settings:
+            show_settings();
             break;
         }
         refresh_tray_state();
+    }
+
+    SettingsApplyApi settings_api(bool persist) {
+        return {
+            [this](HotkeyAction action, std::wstring_view chord) {
+                return hotkeys_ ? hotkeys_->replace(action, chord)
+                    : HotkeyReplaceResult{false, ERROR_INVALID_HANDLE};
+            },
+            [this](WindowLayer layer) {
+                return window_behavior_ && window_behavior_->set_layer(layer);
+            },
+            [this](bool enabled) {
+                return window_behavior_ && window_behavior_->set_click_through(enabled);
+            },
+            [this] {
+                return tray_ && tray_->installed() && hotkeys_ &&
+                    hotkeys_->registration_id(HotkeyAction::toggle_interaction).has_value();
+            },
+            [this, persist](const Settings& settings) {
+                if (persist && !service_.update_settings(settings)) return false;
+                if (window_behavior_) {
+                    window_behavior_->set_auto_restore(settings.click_through_timeout_minutes == 30
+                        ? std::optional{std::chrono::minutes{30}} : std::nullopt);
+                }
+                return true;
+            }};
+    }
+
+    SettingsApplyResult apply_settings(
+        const Settings& current, const Settings& draft, bool persist) {
+        auto result = commit_settings_draft(current, draft, settings_api(persist));
+        if (result.success && persist) {
+            if (widget_) widget_->apply_settings(draft);
+            refresh_tray_state();
+        }
+        return result;
+    }
+
+    void show_settings() {
+        if (!widget_) return;
+        SettingsPanel panel;
+        const auto current = service_.snapshot().settings;
+        static_cast<void>(panel.show_modal(widget_->handle(), current,
+            [this](const Settings& previous, const Settings& draft) {
+                const auto result = apply_settings(previous, draft, true);
+                if (!result.success && !result.rollback_complete)
+                    MessageBoxW(widget_ ? widget_->handle() : nullptr,
+                        L"设置失败，部分系统状态未能自动恢复。请立即检查窗口交互状态和托盘图标。",
+                        L"DesktopTodoList", MB_OK | MB_ICONERROR);
+                return result;
+            }, [this](HWND owner, SettingsTransferAction action) {
+                return handle_data_transfer(owner, action);
+            }));
+    }
+
+    void show_transfer_error(HWND owner, std::wstring_view message) {
+        std::wstring text{message};
+        MessageBoxW(owner, text.c_str(), L"DesktopTodoList", MB_OK | MB_ICONWARNING);
+    }
+
+    bool import_file(const std::filesystem::path& path, HWND owner) {
+        std::wstring error;
+        auto bytes = DataTransferDialog::read_json_file(path, error);
+        if (!bytes.has_value()) {
+            show_transfer_error(owner, error);
+            return false;
+        }
+        const auto choice = MessageBoxW(owner,
+            L"选择导入方式：\n“是”合并任务，不覆盖现有任务；\n“否”替换全部数据（将先备份当前数据）。",
+            L"导入 JSON", MB_YESNOCANCEL | MB_ICONQUESTION);
+        if (choice == IDCANCEL) return false;
+        const auto mode = choice == IDYES ? ImportMode::merge : ImportMode::replace;
+        if (mode == ImportMode::replace && MessageBoxW(owner,
+                L"替换会覆盖当前全部任务和设置。应用会先创建备份，确定继续吗？",
+                L"再次确认替换", MB_YESNO | MB_ICONWARNING) != IDYES) return false;
+
+        auto imported = service_.prepare_import(*bytes, mode);
+        if (!imported.candidate.has_value()) {
+            show_transfer_error(owner, imported.error.empty() ? L"JSON 文件内容无效。" : imported.error);
+            return false;
+        }
+        const auto count = imported.added;
+        const auto issues = imported.issues.size();
+        const auto old_settings = service_.snapshot().settings;
+        const auto imported_settings = imported.candidate->settings;
+        if (mode == ImportMode::replace) {
+            const auto applied = apply_settings(old_settings, imported_settings, false);
+            if (!applied.success) {
+                auto message = applied.error;
+                if (!applied.rollback_complete) message += L" 系统状态未能完全恢复，请立即检查托盘与快捷键。";
+                show_transfer_error(owner, message);
+                return false;
+            }
+        }
+        if (!service_.accept_import(std::move(imported))) {
+            if (mode == ImportMode::replace) {
+                const auto restored = apply_settings(imported_settings, old_settings, false);
+                if (!restored.rollback_complete)
+                    show_transfer_error(owner, L"导入备份失败，且窗口系统状态未能完全恢复。请检查托盘与快捷键。");
+            }
+            show_transfer_error(owner, L"导入没有完成；原有数据仍已保留。请检查磁盘空间和写入权限。 ");
+            return false;
+        }
+        if (mode == ImportMode::replace && widget_) widget_->apply_settings(imported_settings);
+        std::wstring summary = mode == ImportMode::merge
+            ? L"合并完成，新增任务 " : L"替换完成，导入任务 ";
+        summary += std::to_wstring(count) + L" 项。";
+        if (issues != 0) summary += L"另有 " + std::to_wstring(issues) + L" 项数据已自动修复。";
+        MessageBoxW(owner, summary.c_str(), L"导入完成", MB_OK | MB_ICONINFORMATION);
+        refresh_tray_state();
+        return true;
+    }
+
+    std::optional<Settings> handle_data_transfer(HWND owner, SettingsTransferAction action) {
+        if (action == SettingsTransferAction::import_json) {
+            const auto path = DataTransferDialog::choose_import_file(owner);
+            if (path && import_file(*path, owner)) return service_.snapshot().settings;
+            return std::nullopt;
+        }
+        if (action == SettingsTransferAction::export_json) {
+            const auto path = DataTransferDialog::choose_export_file(owner);
+            if (!path) return std::nullopt;
+            auto destination = *path;
+            if (destination.extension().empty()) destination += L".json";
+            if (!DataTransferDialog::accepts_json_path(destination)) {
+                show_transfer_error(owner, L"导出文件扩展名必须为 .json。");
+                return std::nullopt;
+            }
+            const auto result = DataTransferDialog::export_to(service_, destination);
+            if (!result.ok) show_transfer_error(owner, result.error);
+            else MessageBoxW(owner, L"数据已成功导出。", L"导出完成", MB_OK | MB_ICONINFORMATION);
+            return std::nullopt;
+        }
+        if (MessageBoxW(owner,
+                L"此操作会先备份当前数据，再清空任务并恢复默认设置。确定继续吗？",
+                L"重置数据", MB_YESNO | MB_ICONWARNING) != IDYES) return std::nullopt;
+        if (MessageBoxW(owner,
+                L"最后确认：当前任务与设置将被重置。只有完成备份后才会执行。继续吗？",
+                L"再次确认重置", MB_YESNO | MB_ICONWARNING) != IDYES) return std::nullopt;
+
+        const auto previous = service_.snapshot().settings;
+        const Settings defaults;
+        const auto applied = apply_settings(previous, defaults, false);
+        if (!applied.success) {
+            show_transfer_error(owner, applied.error);
+            return std::nullopt;
+        }
+        if (!DataTransferDialog::reset_with_confirmation(service_, true, true)) {
+            const auto restored = apply_settings(defaults, previous, false);
+            if (!restored.rollback_complete)
+                show_transfer_error(owner, L"重置失败，且窗口状态未能完全恢复。请检查托盘与快捷键。");
+            else show_transfer_error(owner, L"重置失败，原数据保持不变。请检查备份目录的写入权限。");
+            return std::nullopt;
+        }
+        if (widget_) widget_->apply_settings(defaults);
+        refresh_tray_state();
+        MessageBoxW(owner, L"重置完成；原数据备份已保留。", L"DesktopTodoList",
+            MB_OK | MB_ICONINFORMATION);
+        return defaults;
     }
 
     void handle_launch_request(const LaunchRequest& request) {

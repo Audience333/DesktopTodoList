@@ -20,6 +20,8 @@ add_executable(desktop_todo_tests
   presentation/editing_test.cpp
   presentation/editor_host_smoke_test.cpp
   presentation/widget_window_smoke_test.cpp
+  presentation/settings_panel_test.cpp
+  presentation/data_transfer_dialog_test.cpp
   presentation/pointer_controller_test.cpp
 )
 
@@ -60,3 +62,5 @@ add_test(NAME native.editor_host_smoke COMMAND desktop_todo_tests --filter edito
 add_test(NAME native.widget_window_smoke COMMAND desktop_todo_tests --filter widget_window_smoke_)
 add_test(NAME native.pointer_controller COMMAND desktop_todo_tests --filter pointer_controller_)
 add_test(NAME native.selection_toolbar COMMAND desktop_todo_tests --filter selection_toolbar_)
+add_test(NAME native.settings_panel COMMAND desktop_todo_tests --filter settings_panel_)
+add_test(NAME native.data_transfer_dialog COMMAND desktop_todo_tests --filter data_transfer_dialog_)

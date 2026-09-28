@@ -30,6 +30,7 @@ public:
     bool set_close_to_tray(bool enabled);
     bool set_window_layer(WindowLayer layer);
     bool set_selectable(bool enabled);
+    bool update_settings(Settings settings);
 
     [[nodiscard]] bool can_undo();
     bool undo();

@@ -172,6 +172,11 @@ StateValidation validate_state(AppState state, Clock::time_point now) {
         settings.remind_advance_minutes = 0;
         add_issue(result.issues, ValidationIssueCode::invalid_reminder_advance);
     }
+    if (settings.click_through_timeout_minutes != 0 &&
+        settings.click_through_timeout_minutes != 30) {
+        settings.click_through_timeout_minutes = 0;
+        add_issue(result.issues, ValidationIssueCode::invalid_click_through_timeout);
+    }
     auto& geometry = settings.floating_geometry;
     if (!std::isfinite(geometry.width) || geometry.width < 260.0 || geometry.width > 2'000.0 ||
         !std::isfinite(geometry.height) || geometry.height < 240.0 || geometry.height > 2'000.0) {

@@ -281,6 +281,12 @@ bool TaskStore::set_selectable(bool enabled) {
     return true;
 }
 
+bool TaskStore::update_settings(Settings settings) {
+    state_.settings = std::move(settings);
+    record_change({});
+    return true;
+}
+
 bool TaskStore::can_undo() {
     expire_undo();
     return undo_.has_value();

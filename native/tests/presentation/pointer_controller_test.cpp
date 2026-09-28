@@ -43,6 +43,23 @@ TEST_CASE(pointer_controller_row_click_supports_ctrl_and_shift_selection) {
     EXPECT_EQ(selection.snapshot().selected_ids, std::vector<std::wstring>({L"c", L"d"}));
 }
 
+TEST_CASE(pointer_controller_respects_disabled_multi_select_and_rubber_band_settings) {
+    SelectionModel selection;
+    selection.select_one(L"a");
+    PointerController pointer{selection};
+    pointer.set_features(false, false);
+    const std::vector<std::wstring> visible{L"a", L"b"};
+
+    static_cast<void>(pointer.press(RowHitArea::row, L"b", {10, 10}, visible, true, false));
+    EXPECT_EQ(selection.snapshot().selected_ids, std::vector<std::wstring>{L"b"});
+
+    static_cast<void>(pointer.press(RowHitArea::none, {}, {0, 0}, {}, false, false));
+    const auto action = pointer.move({20, 20}, {{L"a", {0, 0, 30, 10}}});
+    EXPECT_EQ(action.kind, PointerActionKind::none);
+    EXPECT_TRUE(!pointer.active());
+    EXPECT_EQ(selection.snapshot().selected_ids, std::vector<std::wstring>{L"b"});
+}
+
 TEST_CASE(pointer_controller_blank_drag_rubber_bands_and_ctrl_appends) {
     SelectionModel selection;
     selection.select_one(L"hidden");
