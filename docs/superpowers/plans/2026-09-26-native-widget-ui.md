@@ -187,7 +187,7 @@
 
   Expected: automated state tests pass; interactive items report PASS or an explicit environment SKIP, never a silent pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
   ```powershell
   git add native/presentation native/tests native/CMakeLists.txt
