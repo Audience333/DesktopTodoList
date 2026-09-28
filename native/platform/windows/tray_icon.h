@@ -30,6 +30,7 @@ struct TrayMenuState {
     std::uint32_t pending_count = 0;
     WindowLayer layer = WindowLayer::normal;
     bool interaction_enabled = true;
+    bool interaction_toggle_available = true;
     bool close_to_tray = true;
 };
 
@@ -66,6 +67,7 @@ public:
     void update_state(TrayMenuState state);
     void remove() noexcept;
     [[nodiscard]] bool handle_taskbar_created();
+    [[nodiscard]] bool installed() const noexcept;
     void show_context_menu();
     [[nodiscard]] UINT taskbar_created_message() const noexcept;
 

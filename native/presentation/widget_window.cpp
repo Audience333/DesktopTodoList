@@ -4,6 +4,7 @@
 #include "domain/commands.h"
 #include "platform/windows/window_class.h"
 #include "platform/windows/tray_icon.h"
+#include "platform/windows/window_behavior.h"
 #include "presentation/details_panel.h"
 #include "presentation/layout.h"
 #include "presentation/renderer.h"
@@ -161,6 +162,11 @@ bool WidgetWindow::toggle_visibility() {
 
 void WidgetWindow::begin_new_task() {
     if (text_editor_) text_editor_->begin_new_task();
+}
+
+bool WidgetWindow::set_click_through(bool enabled) {
+    return apply_window_click_through(window_, enabled,
+        service_.snapshot().settings.window_layer);
 }
 
 HWND WidgetWindow::handle() const noexcept { return window_; }

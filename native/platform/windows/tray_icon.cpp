@@ -55,12 +55,12 @@ std::vector<TrayMenuItem> build_tray_menu(const TrayMenuState& state) {
     items.push_back({TrayCommand::pending_count,
         L"待办事项: " + std::to_wstring(state.pending_count), false, false, true});
     items.push_back({TrayCommand::new_task, L"新建任务", false, true, true});
-    items.push_back({TrayCommand::layer_top, L"置顶", state.layer == WindowLayer::top, false, true});
-    items.push_back({TrayCommand::layer_normal, L"普通", state.layer == WindowLayer::normal, false});
-    items.push_back({TrayCommand::layer_bottom, L"置底", state.layer == WindowLayer::bottom, false});
+    items.push_back({TrayCommand::layer_top, L"置顶", state.layer == WindowLayer::top, true, true});
+    items.push_back({TrayCommand::layer_normal, L"普通", state.layer == WindowLayer::normal, true});
+    items.push_back({TrayCommand::layer_bottom, L"置底", state.layer == WindowLayer::bottom, true});
     items.push_back({TrayCommand::toggle_interaction,
         state.interaction_enabled ? L"开启鼠标穿透" : L"允许交互",
-        state.interaction_enabled, false, true});
+        state.interaction_enabled, state.interaction_toggle_available, true});
     items.push_back({TrayCommand::toggle_close_behavior, L"关闭时收起到托盘",
         state.close_to_tray, true, true});
     items.push_back({TrayCommand::settings, L"设置", false, false, true});
@@ -123,6 +123,8 @@ bool TrayIcon::handle_taskbar_created() {
     installed_ = false;
     return install();
 }
+
+bool TrayIcon::installed() const noexcept { return installed_; }
 
 void TrayIcon::show_context_menu() {
     if (owner_ == nullptr) return;

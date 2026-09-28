@@ -81,6 +81,16 @@ TEST_CASE(task_store_persists_close_to_tray_setting_as_a_state_change) {
     EXPECT_TRUE(!fixture.store.set_close_to_tray(false));
 }
 
+TEST_CASE(task_store_persists_window_layer_and_selectable_state_changes) {
+    StoreFixture fixture;
+
+    EXPECT_TRUE(fixture.store.set_window_layer(desktop_todo::WindowLayer::bottom));
+    EXPECT_TRUE(fixture.store.set_selectable(false));
+    EXPECT_EQ(fixture.store.state().settings.window_layer, desktop_todo::WindowLayer::bottom);
+    EXPECT_TRUE(!fixture.store.state().settings.selectable);
+    EXPECT_TRUE(fixture.store.take_change().persisted);
+}
+
 TEST_CASE(task_store_newest_task_uses_smallest_order) {
     Clock::time_point now{std::chrono::milliseconds{1'800'000'000'000}};
     int next_id = 1;

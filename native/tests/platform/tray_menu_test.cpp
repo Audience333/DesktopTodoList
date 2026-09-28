@@ -48,6 +48,14 @@ TEST_CASE(tray_menu_and_tooltip_expose_pending_count_and_click_through_state) {
     EXPECT_TRUE(tooltip.find(L"鼠标穿透") != std::wstring::npos);
 }
 
+TEST_CASE(tray_menu_disables_click_through_when_a_recovery_route_is_unavailable) {
+    const auto menu = build_tray_menu({
+        .window_visible = true,
+        .interaction_toggle_available = false});
+
+    EXPECT_TRUE(!item(menu, TrayCommand::toggle_interaction).enabled);
+}
+
 TEST_CASE(tray_icon_reinstalls_after_explorer_taskbar_restart) {
     int adds = 0;
     int updates = 0;

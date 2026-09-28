@@ -12,6 +12,7 @@ add_executable(desktop_todo_tests
   platform/single_instance_test.cpp
   platform/tray_menu_test.cpp
   platform/hotkey_service_test.cpp
+  platform/window_behavior_test.cpp
   presentation/layout_test.cpp
   presentation/renderer_smoke_test.cpp
   presentation/renderer_state_test.cpp
@@ -49,6 +50,7 @@ add_test(NAME native.app_service COMMAND desktop_todo_tests --filter app_service
 add_test(NAME native.single_instance COMMAND desktop_todo_tests --filter single_instance_)
 add_test(NAME native.tray_menu COMMAND desktop_todo_tests --filter tray_)
 add_test(NAME native.hotkey_service COMMAND desktop_todo_tests --filter hotkey_service_)
+add_test(NAME native.window_behavior COMMAND desktop_todo_tests --filter window_behavior_)
 add_test(NAME native.layout COMMAND desktop_todo_tests --filter layout_)
 add_test(NAME native.renderer_smoke COMMAND desktop_todo_tests --filter renderer_smoke_)
 add_test(NAME native.renderer_state COMMAND desktop_todo_tests --filter renderer_state_)

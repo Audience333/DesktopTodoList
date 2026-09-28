@@ -35,6 +35,7 @@ public:
     void hide_to_tray();
     [[nodiscard]] bool toggle_visibility();
     void begin_new_task();
+    [[nodiscard]] bool set_click_through(bool enabled);
     [[nodiscard]] HWND handle() const noexcept;
 
 private:

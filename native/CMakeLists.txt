@@ -21,6 +21,7 @@ add_library(desktop_todo_core STATIC
   platform/windows/single_instance.cpp
   platform/windows/tray_icon.cpp
   platform/windows/hotkey_service.cpp
+  platform/windows/window_behavior.cpp
   presentation/details_panel.cpp
   presentation/editor_session.cpp
   presentation/layout.cpp

@@ -6,6 +6,7 @@
 #include "platform/windows/single_instance.h"
 #include "platform/windows/hotkey_service.h"
 #include "platform/windows/tray_icon.h"
+#include "platform/windows/window_behavior.h"
 #include "platform/windows/window_class.h"
 #include "presentation/widget_window.h"
 
@@ -24,6 +25,7 @@ namespace {
 
 constexpr UINT kShowExistingWidgetMessage = WM_APP + 0x31;
 constexpr UINT kTrayCallbackMessage = WM_APP + 0x41;
+constexpr UINT_PTR kWindowBehaviorTimer = 0xD712;
 
 Clock::time_point current_time() {
     return std::chrono::time_point_cast<std::chrono::milliseconds>(
@@ -143,6 +145,42 @@ public:
                     L"DesktopTodoList", MB_OK | MB_ICONWARNING);
             }
         }
+        const auto recovery_hotkey = parse_hotkey(service_.snapshot().settings.selectable_hotkey);
+        if (recovery_hotkey.has_value()) {
+            const auto registered = hotkeys_->replace(
+                HotkeyAction::toggle_interaction, *recovery_hotkey);
+            if (!registered.success) {
+                MessageBoxW(nullptr, L"交互恢复快捷键无法注册。鼠标穿透选项将保持禁用，以免窗口无法找回。",
+                    L"DesktopTodoList", MB_OK | MB_ICONWARNING);
+            }
+        }
+        window_behavior_ = std::make_unique<WindowBehavior>(WindowBehaviorApi{
+            [this](WindowLayer previous, WindowLayer target) {
+                return apply_window_layer(widget_ ? widget_->handle() : nullptr,
+                    target, previous, !service_.snapshot().settings.selectable);
+            },
+            [this](bool enabled) {
+                return widget_ && widget_->set_click_through(enabled);
+            },
+            [this] { return tray_ && tray_->installed(); },
+            [this] {
+                return hotkeys_ && hotkeys_->registration_id(
+                    HotkeyAction::toggle_interaction).has_value();
+            },
+            [] { return std::chrono::steady_clock::now(); }});
+        window_behavior_->set_auto_restore(std::nullopt);
+        if (!window_behavior_->initialize(service_.snapshot().settings.window_layer,
+                !service_.snapshot().settings.selectable)) {
+            static_cast<void>(service_.set_selectable(true));
+            static_cast<void>(service_.set_window_layer(window_behavior_->snapshot().layer));
+            MessageBoxW(nullptr, L"已保存的窗口模式无法安全恢复，已改为允许交互。可通过通知区域菜单重新设置。",
+                L"DesktopTodoList", MB_OK | MB_ICONWARNING);
+        }
+        SetTimer(message_, kWindowBehaviorTimer, 1000, nullptr);
+        foreground_owner_ = this;
+        foreground_hook_ = SetWinEventHook(EVENT_SYSTEM_FOREGROUND,
+            EVENT_SYSTEM_FOREGROUND, nullptr, &Impl::foreground_event,
+            0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
         refresh_tray_state();
         if (!service_.snapshot().settings.start_minimized ||
             launch_request.command == LaunchCommand::import_file) {
@@ -171,6 +209,14 @@ private:
         return reinterpret_cast<Impl*>(GetWindowLongPtrW(window, GWLP_USERDATA));
     }
 
+    static void CALLBACK foreground_event(HWINEVENTHOOK, DWORD, HWND foreground,
+        LONG, LONG, DWORD, DWORD) {
+        if (foreground_owner_ && foreground_owner_->window_behavior_ &&
+            foreground_owner_->widget_ && foreground != foreground_owner_->widget_->handle()) {
+            foreground_owner_->window_behavior_->on_foreground_changed();
+        }
+    }
+
     static LRESULT CALLBACK message_window_proc(
         HWND window, UINT message, WPARAM parameter, LPARAM data) {
         auto* self = from_window(window, message, data);
@@ -180,7 +226,16 @@ private:
         }
         if (self != nullptr && self->tray_ &&
             message == self->tray_->taskbar_created_message()) {
-            static_cast<void>(self->tray_->handle_taskbar_created());
+            if (!self->tray_->handle_taskbar_created() && self->window_behavior_ &&
+                self->window_behavior_->snapshot().click_through) {
+                self->window_behavior_->restore_interaction();
+                if (!self->window_behavior_->snapshot().click_through) {
+                    static_cast<void>(self->service_.set_selectable(true));
+                } else {
+                    MessageBoxW(nullptr, L"托盘恢复失败，且窗口样式无法恢复交互。请按 Ctrl+Alt+L 重试。",
+                        L"DesktopTodoList", MB_OK | MB_ICONERROR);
+                }
+            }
             self->refresh_tray_state();
             return 0;
         }
@@ -192,6 +247,20 @@ private:
             const auto action = self->hotkeys_->action_for(static_cast<int>(parameter));
             if (action == std::optional<HotkeyAction>{HotkeyAction::show_hide} && self->widget_) {
                 static_cast<void>(self->widget_->toggle_visibility());
+                self->refresh_tray_state();
+            } else if (action == std::optional<HotkeyAction>{HotkeyAction::toggle_interaction} &&
+                self->window_behavior_) {
+                const auto enable = !self->window_behavior_->snapshot().click_through;
+                if (self->window_behavior_->set_click_through(enable)) {
+                    static_cast<void>(self->service_.set_selectable(!enable));
+                    self->refresh_tray_state();
+                }
+            }
+            return 0;
+        }
+        if (message == WM_TIMER && self != nullptr && parameter == kWindowBehaviorTimer) {
+            if (self->window_behavior_ && self->window_behavior_->poll_timeout()) {
+                static_cast<void>(self->service_.set_selectable(true));
                 self->refresh_tray_state();
             }
             return 0;
@@ -236,6 +305,8 @@ private:
             .pending_count = pending,
             .layer = state.settings.window_layer,
             .interaction_enabled = state.settings.selectable,
+            .interaction_toggle_available = tray_->installed() && hotkeys_ &&
+                hotkeys_->registration_id(HotkeyAction::toggle_interaction).has_value(),
             .close_to_tray = state.settings.close_to_tray});
     }
 
@@ -262,6 +333,29 @@ private:
             widget_->show_and_activate();
             widget_->begin_new_task();
             break;
+        case TrayCommand::layer_top:
+        case TrayCommand::layer_normal:
+        case TrayCommand::layer_bottom: {
+            const auto layer = command == TrayCommand::layer_top ? WindowLayer::top :
+                command == TrayCommand::layer_bottom ? WindowLayer::bottom : WindowLayer::normal;
+            if (window_behavior_ && window_behavior_->set_layer(layer)) {
+                static_cast<void>(service_.set_window_layer(layer));
+            } else {
+                MessageBeep(MB_ICONWARNING);
+            }
+            break;
+        }
+        case TrayCommand::toggle_interaction: {
+            const auto enable = window_behavior_ &&
+                !window_behavior_->snapshot().click_through;
+            if (window_behavior_ && window_behavior_->set_click_through(enable)) {
+                static_cast<void>(service_.set_selectable(!enable));
+            } else {
+                MessageBoxW(nullptr, L"无法安全切换鼠标交互状态。请确认通知区域图标与恢复快捷键均可用。",
+                    L"DesktopTodoList", MB_OK | MB_ICONWARNING);
+            }
+            break;
+        }
         case TrayCommand::toggle_close_behavior: {
             const auto enable = !service_.snapshot().settings.close_to_tray;
             static_cast<void>(service_.set_close_to_tray(enable));
@@ -271,10 +365,6 @@ private:
             widget_->destroy();
             break;
         case TrayCommand::pending_count:
-        case TrayCommand::layer_top:
-        case TrayCommand::layer_normal:
-        case TrayCommand::layer_bottom:
-        case TrayCommand::toggle_interaction:
         case TrayCommand::settings:
             break;
         }
@@ -290,6 +380,13 @@ private:
     }
 
     void cleanup_windows() {
+        if (foreground_hook_ != nullptr) {
+            UnhookWinEvent(foreground_hook_);
+            foreground_hook_ = nullptr;
+        }
+        if (foreground_owner_ == this) foreground_owner_ = nullptr;
+        if (message_ != nullptr) KillTimer(message_, kWindowBehaviorTimer);
+        window_behavior_.reset();
         hotkeys_.reset();
         if (tray_) tray_->remove();
         tray_.reset();
@@ -314,7 +411,10 @@ private:
     std::unique_ptr<WidgetWindow> widget_;
     std::unique_ptr<TrayIcon> tray_;
     std::unique_ptr<HotkeyService> hotkeys_;
+    std::unique_ptr<WindowBehavior> window_behavior_;
+    HWINEVENTHOOK foreground_hook_ = nullptr;
     std::optional<std::filesystem::path> pending_import_;
+    inline static Impl* foreground_owner_ = nullptr;
 };
 
 Application::Application() : impl_(std::make_unique<Impl>()) {}

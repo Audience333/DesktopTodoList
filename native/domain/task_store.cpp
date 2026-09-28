@@ -267,6 +267,20 @@ bool TaskStore::set_close_to_tray(bool enabled) {
     return true;
 }
 
+bool TaskStore::set_window_layer(WindowLayer layer) {
+    if (state_.settings.window_layer == layer) return false;
+    state_.settings.window_layer = layer;
+    record_change({});
+    return true;
+}
+
+bool TaskStore::set_selectable(bool enabled) {
+    if (state_.settings.selectable == enabled) return false;
+    state_.settings.selectable = enabled;
+    record_change({});
+    return true;
+}
+
 bool TaskStore::can_undo() {
     expire_undo();
     return undo_.has_value();

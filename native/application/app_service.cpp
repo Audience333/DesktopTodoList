@@ -164,6 +164,18 @@ bool AppService::set_close_to_tray(bool enabled) {
     return changed;
 }
 
+bool AppService::set_window_layer(WindowLayer layer) {
+    const auto changed = store_->set_window_layer(layer);
+    collect_change();
+    return changed;
+}
+
+bool AppService::set_selectable(bool enabled) {
+    const auto changed = store_->set_selectable(enabled);
+    collect_change();
+    return changed;
+}
+
 ExportResult AppService::export_to(const std::filesystem::path& destination) const {
     return repository_.export_to(destination, store_->state());
 }
