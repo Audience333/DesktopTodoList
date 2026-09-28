@@ -9,6 +9,7 @@ add_executable(desktop_todo_tests
   persistence/import_export_test.cpp
   persistence/json_codec_test.cpp
   persistence/state_repository_test.cpp
+  platform/single_instance_test.cpp
 )
 
 target_compile_features(desktop_todo_tests PRIVATE cxx_std_20)
@@ -28,3 +29,4 @@ add_test(NAME native.import_export COMMAND desktop_todo_tests --filter import_ex
 add_test(NAME native.json_codec COMMAND desktop_todo_tests --filter json_codec_)
 add_test(NAME native.state_repository COMMAND desktop_todo_tests --filter state_repository_)
 add_test(NAME native.app_service COMMAND desktop_todo_tests --filter app_service_)
+add_test(NAME native.single_instance COMMAND desktop_todo_tests --filter single_instance_)

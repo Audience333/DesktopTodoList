@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <shellapi.h>
 
+#include "app/application.h"
 #include "application/app_service.h"
 #include "persistence/file_system.h"
 #include "persistence/json_codec.h"
@@ -65,12 +66,22 @@ int verify_core(const std::filesystem::path& fixture) {
 
 }  // namespace
 
-int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
+int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show_command) {
     int count = 0;
     auto* arguments = CommandLineToArgvW(GetCommandLineW(), &count);
     if (arguments == nullptr) return 2;
     const bool verify = count == 3 && std::wstring_view{arguments[1]} == L"--verify-core";
-    const auto result = verify ? verify_core(arguments[2]) : 0;
+    const auto result = verify ? verify_core(arguments[2]) : -1;
     LocalFree(arguments);
-    return result;
+    if (verify) return result;
+
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    desktop_todo::Application application;
+    const auto exit_code = application.run(instance, show_command);
+    if (exit_code != 0 && exit_code != 3) {
+        MessageBoxW(nullptr,
+            L"桌面待办无法启动。请检查本地应用数据目录和系统权限。",
+            L"DesktopTodoList", MB_OK | MB_ICONERROR);
+    }
+    return exit_code;
 }
