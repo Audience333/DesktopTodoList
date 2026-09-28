@@ -209,23 +209,23 @@
 - Consumes: `SelectionModel` and reorder/batch commands from Plan 1; hit tests from Task 3.
 - Produces: pointer actions `click`, `ctrl_click`, `shift_click`, `rubber_band`, `begin_drag`, `drop`; batch-toolbar model including hidden-selection count.
 
-- [ ] **Step 1: Write failing pointer arbitration tests**
+- [x] **Step 1: Write failing pointer arbitration tests**
 
   Assert checkbox toggles completion without selection, row area selects, title begins edit, handle begins ordering, blank drag begins rubber band, Ctrl rubber band appends, Shift keyboard extends, hidden count is shown, batch completion/deletion/priority/due-date/tag changes apply once, and bulk delete restores as one undo action.
 
-- [ ] **Step 2: Run pointer tests and confirm failure**
+- [x] **Step 2: Run pointer tests and confirm failure**
 
   Run: `ctest --preset windows-x64-debug -R pointer_controller --output-on-failure`.
 
-- [ ] **Step 3: Implement pointer controller and batch toolbar**
+- [x] **Step 3: Implement pointer controller and batch toolbar**
 
   Use pointer capture only for active drag/rubber-band operations and always release it on cancellation, focus loss, or window destruction.
 
-- [ ] **Step 4: Run presentation tests and interactive drag checks**
+- [x] **Step 4: Run presentation tests and interactive drag checks**
 
   Expected: all tests pass and drag/rubber-band operations do not interfere with window dragging or scrolling.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
   ```powershell
   git add native/presentation native/tests/presentation
