@@ -382,7 +382,7 @@
 
   Expected: automated tests pass; Narrator/Inspect checks are recorded as PASS or environment SKIP. **PASS:** hidden native widget smoke test verifies the `WM_GETOBJECT` UIA fragment root and all 28 CTest targets pass. **SKIP:** Narrator/Inspect visual validation is deferred because the existing older application instance is active and no separate interactive desktop session is available.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
   ```powershell
   git add native/platform/windows native/presentation native/tests native/app
@@ -401,25 +401,25 @@
 - Consumes: all prior tasks in Plans 1 and 2.
 - Produces: repeatable acceptance report with `PASS`, `FAIL`, or `SKIP` for every native widget capability.
 
-- [ ] **Step 1: Add a failing acceptance manifest**
+- [x] **Step 1: Add a failing acceptance manifest**
 
   Include process/browser absence, cold launch at most 1 second, idle working set below 120 MB, single instance, CRUD, four views, editing, selection, drag order, import/export/reset, settings, tray, hotkeys, layers, click-through recovery, reminder fallback, autostart, accessibility, DPI, monitor recovery, shutdown flush, and 1,000-task performance.
 
-- [ ] **Step 2: Run the harness and record the expected incomplete result**
+- [x] **Step 2: Run the harness and record the expected incomplete result**
 
   Run: `powershell -ExecutionPolicy Bypass -File native/tests/windows/widget-acceptance.ps1`.
 
-  Expected: nonzero while any automatable item is FAIL; unavailable interactive environments are SKIP with a reason.
+  Expected: nonzero while any automatable item is FAIL; unavailable interactive environments are SKIP with a reason. **PASS:** `widget-acceptance.ps1` produced 18 PASS, 0 FAIL, 8 SKIP on this host; skips name the running-instance, registry, screen-reader, and physical-display constraints.
 
-- [ ] **Step 3: Fix only integration gaps exposed by the acceptance run**
+- [x] **Step 3: Fix only integration gaps exposed by the acceptance run**
 
-  Do not add new product behavior. Update `docs/acceptance/native-widget.md` with environment, architecture, OS build, DPI, and evidence for each manual item.
+  Do not add new product behavior. Update `docs/acceptance/native-widget.md` with environment, architecture, OS build, DPI, and evidence for each manual item. **PASS:** no additional product gap was found; the report records Windows build, x64, 96 DPI, two monitors, and every PASS/SKIP evidence item.
 
-- [ ] **Step 4: Run full Debug and Release verification**
+- [x] **Step 4: Run full Debug and Release verification**
 
   Run: both x64 presets, full CTest, `tests/run-all.ps1`, and widget acceptance.
 
-  Expected: all automatable checks pass; no unexplained skip or browser process exists.
+  Expected: all automatable checks pass; no unexplained skip or browser process exists. **PASS:** clean Debug and Release builds succeeded; each configuration passed all 28 CTest targets; `tests/run-all.ps1 -NativeBuildDirectory out/verification-task9` passed Native Widget Acceptance, JavaScript, Server, and Window groups. The legacy window harness reported its expected environment skip for an unavailable target window.
 
 - [ ] **Step 5: Commit**
 

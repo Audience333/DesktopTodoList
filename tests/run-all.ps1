@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param()
+param([string]$NativeBuildDirectory = 'out\build\windows-x64')
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -26,21 +26,16 @@ function Invoke-TestGroup {
 
 Push-Location $root
 try {
-  $ctest = Get-Command 'ctest.exe' -ErrorAction SilentlyContinue
-  if (-not $ctest) {
-    $vswhere = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe'
-    if (Test-Path -LiteralPath $vswhere) {
-      $vsRoot = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.CMake.Project -property installationPath
-      if ($vsRoot) {
-        $bundledCtest = Join-Path $vsRoot 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\ctest.exe'
-        if (Test-Path -LiteralPath $bundledCtest) { $ctest = Get-Item -LiteralPath $bundledCtest }
-      }
-    }
+  $nativeBuildPath = if ([IO.Path]::IsPathRooted($NativeBuildDirectory)) {
+    [IO.Path]::GetFullPath($NativeBuildDirectory)
+  } else {
+    [IO.Path]::GetFullPath((Join-Path $root $NativeBuildDirectory))
   }
-  if ($ctest -and (Test-Path -LiteralPath 'out\build\windows-x64\CTestTestfile.cmake')) {
-    $ctestPath = if ($ctest.Source) { $ctest.Source } else { $ctest.FullName }
-    Invoke-TestGroup -Name 'Native' -File $ctestPath -Arguments @('--preset','windows-x64-debug','--output-on-failure')
-    Invoke-TestGroup -Name 'Native Core Acceptance' -File 'powershell.exe' -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File','native/tests/native-core-acceptance.ps1')
+  if (Test-Path -LiteralPath (Join-Path $nativeBuildPath 'CTestTestfile.cmake')) {
+    Invoke-TestGroup -Name 'Native Widget Acceptance' -File 'powershell.exe' -Arguments @(
+      '-NoProfile','-ExecutionPolicy','Bypass','-File','native/tests/windows/widget-acceptance.ps1',
+      '-BuildDirectory',$nativeBuildPath
+    )
   }
   Invoke-TestGroup -Name 'JavaScript' -File 'node.exe' -Arguments @('tests/run-tests.js')
   Invoke-TestGroup -Name 'Server' -File 'powershell.exe' -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File','tests/test-server.ps1')
