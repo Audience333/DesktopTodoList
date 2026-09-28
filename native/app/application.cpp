@@ -109,7 +109,6 @@ public:
             cleanup_windows();
             return 7;
         }
-
         widget_ = std::make_unique<WidgetWindow>(service_);
         if (!widget_->create(instance, show_command)) {
             cleanup_windows();

@@ -73,6 +73,6 @@ TEST_CASE(renderer_smoke_draws_visible_rows_from_a_1000_task_snapshot_within_bud
 
     EXPECT_TRUE(elapsed < std::chrono::milliseconds{200});
     std::cout << "[BENCH] 1000-task visible Direct2D render: "
-        << std::chrono::duration<double, std::milli>(elapsed).count() << " ms\n";
+        << std::chrono::duration<double, std::milli>(elapsed).count() << " ms" << std::endl;
     EXPECT_TRUE(renderer.create_device_resources());
 }

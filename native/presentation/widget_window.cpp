@@ -1,10 +1,13 @@
 #include "presentation/widget_window.h"
 
 #include "application/app_service.h"
+#include "domain/commands.h"
 #include "platform/windows/window_class.h"
+#include "presentation/details_panel.h"
 #include "presentation/layout.h"
 #include "presentation/renderer.h"
 #include "presentation/task_list_view.h"
+#include "presentation/text_editor.h"
 #include "presentation/theme.h"
 
 #include <algorithm>
@@ -18,6 +21,7 @@ namespace {
 
 constexpr wchar_t kWidgetWindowClass[] = L"DesktopTodoList.WidgetWindow.v2";
 constexpr UINT_PTR kMaintenanceTimer = 1;
+constexpr float kDetailsWindowMinimumHeight = 500.0F;
 
 SystemTheme read_system_theme() {
     HIGHCONTRASTW contrast{sizeof(contrast)};
@@ -99,6 +103,11 @@ bool WidgetWindow::create(HINSTANCE instance, int show_command) {
     if (window_ == nullptr) return false;
     dpi_ = GetDpiForWindow(window_);
     renderer_ = std::make_unique<Renderer>(window_);
+    text_editor_ = std::make_unique<TextEditor>();
+    if (!text_editor_->create(window_, dpi_)) return false;
+    details_panel_ = std::make_unique<DetailsPanel>();
+    if (!details_panel_->create(window_)) return false;
+    text_editor_->layout(current_layout(window_, dpi_), dpi_);
     clamp_to_monitor();
     SetTimer(window_, kMaintenanceTimer, 250, nullptr);
     ShowWindow(window_, show_command == SW_HIDE ? SW_SHOWNORMAL : show_command);
@@ -107,6 +116,10 @@ bool WidgetWindow::create(HINSTANCE instance, int show_command) {
 }
 
 void WidgetWindow::destroy() {
+    if (text_editor_) text_editor_->destroy();
+    text_editor_.reset();
+    if (details_panel_) details_panel_->destroy();
+    details_panel_.reset();
     if (window_ != nullptr) DestroyWindow(window_);
     renderer_.reset();
     window_class_.reset();
@@ -157,7 +170,9 @@ LRESULT WidgetWindow::handle_message(UINT message, WPARAM wparam, LPARAM lparam)
         auto* limits = reinterpret_cast<MINMAXINFO*>(lparam);
         limits->ptMinTrackSize.x = static_cast<LONG>(
             minimum_widget_width(static_cast<float>(dpi_)));
-        limits->ptMinTrackSize.y = static_cast<LONG>(320.0F * dpi_ / 96.0F);
+        const auto minimum_height = details_panel_ && details_panel_->visible()
+            ? kDetailsWindowMinimumHeight : 320.0F;
+        limits->ptMinTrackSize.y = static_cast<LONG>(minimum_height * dpi_ / 96.0F);
         return 0;
     }
     case WM_DPICHANGED: {
@@ -174,11 +189,177 @@ LRESULT WidgetWindow::handle_message(UINT message, WPARAM wparam, LPARAM lparam)
         return 0;
     case WM_SIZE:
         if (renderer_) renderer_->resize(LOWORD(lparam), HIWORD(lparam));
+        if (text_editor_) text_editor_->layout(current_layout(window_, dpi_), dpi_);
+        if (details_panel_ && details_panel_->visible())
+            details_panel_->layout(current_layout(window_, dpi_).task_list, dpi_);
         invalidate();
         return 0;
     case WM_LBUTTONUP:
         handle_pointer({GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)});
         return 0;
+    case WM_LBUTTONDBLCLK: {
+        const auto scale = static_cast<float>(dpi_) / 96.0F;
+        const PointF logical{
+            static_cast<float>(GET_X_LPARAM(lparam)) / scale,
+            static_cast<float>(GET_Y_LPARAM(lparam)) / scale};
+        const auto layout = current_layout(window_, dpi_);
+        const auto local_y = logical.y - layout.task_list.y + scroll_y_;
+        if (local_y >= 0) {
+            const auto index = static_cast<std::size_t>(local_y / 58.0F);
+            if (index < view_model_.rows.size()) {
+                const auto& id = view_model_.rows[index].id;
+                const auto& tasks = service_.snapshot().tasks;
+                const auto task = std::find_if(tasks.begin(), tasks.end(),
+                    [&id](const Task& value) { return value.id == id; });
+                if (task != tasks.end() && details_panel_) {
+                    details_task_id_ = id;
+                    details_panel_->open(*task, layout.task_list, dpi_);
+                    ensure_details_window_height();
+                    invalidate();
+                }
+            }
+        }
+        return 0;
+    }
+    case WM_COMMAND: {
+        const auto child = reinterpret_cast<HWND>(lparam);
+        if (details_panel_ && HIWORD(wparam) == BN_CLICKED &&
+            LOWORD(wparam) == kDetailsSaveControlId) {
+            const auto patch = details_panel_->read_patch();
+            if (!patch) {
+                MessageBeep(MB_ICONWARNING);
+                return 0;
+            }
+            const bool changed = patch->note.has_value() || patch->priority.has_value() ||
+                patch->due_at.has_value() || patch->remind.has_value() || patch->tags.has_value();
+            if (changed) static_cast<void>(service_.update_task(details_panel_->task_id(), *patch));
+            details_panel_->close();
+            details_task_id_.clear();
+            SetFocus(window_);
+            invalidate();
+            return 0;
+        }
+        if (details_panel_ && HIWORD(wparam) == BN_CLICKED &&
+            LOWORD(wparam) == kDetailsCancelControlId) {
+            details_panel_->close();
+            details_task_id_.clear();
+            SetFocus(window_);
+            invalidate();
+            return 0;
+        }
+        if (text_editor_ && HIWORD(wparam) == EN_CHANGE) {
+            text_editor_->capture_text(child);
+            if (text_editor_->control_for(child) == NativeEditorControl::search) {
+                search_text_ = text_editor_->search_text();
+            }
+            invalidate();
+            return 0;
+        }
+        break;
+    }
+    case kEditorCommitMessage:
+        if (text_editor_) {
+            const auto mode = text_editor_->active_control();
+            const auto result = text_editor_->commit_active();
+            if (result && mode == NativeEditorControl::quick_add) {
+                if (!service_.add_task(AddTaskCommand{.title = result->text}).has_value()) {
+                    MessageBeep(MB_ICONWARNING);
+                }
+                invalidate();
+                if (text_editor_->active_handle() != nullptr) SetFocus(text_editor_->active_handle());
+            } else if (result && mode == NativeEditorControl::inline_title) {
+                TaskPatch patch;
+                patch.title = result->text;
+                static_cast<void>(service_.update_task(result->target_id, patch));
+                invalidate();
+            } else if (result && mode == NativeEditorControl::search) {
+                search_text_ = result->text;
+                invalidate();
+            } else if (!result) {
+                MessageBeep(MB_ICONWARNING);
+            }
+        }
+        return 0;
+    case kEditorCancelMessage:
+    case kDetailsCancelMessage:
+        if (text_editor_) {
+            if (details_panel_ && details_panel_->visible()) {
+                details_panel_->close();
+                details_task_id_.clear();
+                SetFocus(window_);
+            } else {
+                text_editor_->cancel_active();
+                search_text_ = text_editor_->search_text();
+            }
+            invalidate();
+        }
+        return 0;
+    case kEditorFocusLostMessage:
+        if (text_editor_ && text_editor_->active_control() == NativeEditorControl::inline_title &&
+            text_editor_->active_handle() == reinterpret_cast<HWND>(lparam) &&
+            text_editor_->focus_generation() == static_cast<std::uint32_t>(wparam)) {
+            commit_inline_title();
+        }
+        return 0;
+    case kEditorNewTaskMessage:
+    case kEditorSearchMessage:
+    case kEditorMoveTaskMessage:
+    case WM_KEYDOWN:
+        if (text_editor_ && (message == kEditorNewTaskMessage ||
+            (wparam == 'N' && (GetKeyState(VK_CONTROL) & 0x8000) != 0))) {
+            text_editor_->begin_new_task();
+            return 0;
+        }
+        if (text_editor_ && (message == kEditorSearchMessage ||
+            (wparam == 'F' && (GetKeyState(VK_CONTROL) & 0x8000) != 0))) {
+            text_editor_->focus_search();
+            return 0;
+        }
+        if (message == WM_KEYDOWN && wparam == VK_ESCAPE && text_editor_) {
+            if (details_panel_ && details_panel_->visible()) {
+                details_panel_->close();
+                details_task_id_.clear();
+                SetFocus(window_);
+                invalidate();
+                return 0;
+            }
+            if (text_editor_->active_control() != NativeEditorControl::none) {
+                text_editor_->cancel_active();
+            } else if (!search_text_.empty()) {
+                text_editor_->clear_search();
+                search_text_.clear();
+                invalidate();
+            }
+            return 0;
+        }
+        if (message == WM_KEYDOWN && wparam == VK_DELETE) {
+            static_cast<void>(service_.delete_tasks(service_.selection().snapshot().selected_ids));
+            invalidate();
+            return 0;
+        }
+        if (message == kEditorMoveTaskMessage ||
+            (message == WM_KEYDOWN && (GetKeyState(VK_MENU) & 0x8000) != 0 &&
+                (wparam == VK_UP || wparam == VK_DOWN))) {
+            const auto move_up = wparam == VK_UP;
+            const auto selected = service_.selection().snapshot().selected_ids;
+            if (selected.size() == 1) {
+                const auto row = std::find_if(view_model_.rows.begin(), view_model_.rows.end(),
+                    [&selected](const TaskRowModel& value) { return value.id == selected.front(); });
+                if (row != view_model_.rows.end()) {
+                    const auto index = static_cast<std::size_t>(row - view_model_.rows.begin());
+                    if (move_up && index > 0) {
+                        static_cast<void>(service_.reorder(row->id,
+                            view_model_.rows[index - 1].id, DropPosition::before));
+                    } else if (!move_up && index + 1 < view_model_.rows.size()) {
+                        static_cast<void>(service_.reorder(row->id,
+                            view_model_.rows[index + 1].id, DropPosition::after));
+                    }
+                }
+            }
+            invalidate();
+            return 0;
+        }
+        break;
     case WM_MOUSEWHEEL: {
         POINT point{GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)};
         ScreenToClient(window_, &point);
@@ -215,6 +396,8 @@ LRESULT WidgetWindow::handle_message(UINT message, WPARAM wparam, LPARAM lparam)
         return 0;
     case WM_DESTROY:
         KillTimer(window_, kMaintenanceTimer);
+        text_editor_.reset();
+        details_panel_.reset();
         static_cast<void>(service_.flush());
         renderer_.reset();
         window_ = nullptr;
@@ -231,6 +414,7 @@ void WidgetWindow::draw() {
     const auto& state = service_.snapshot();
     QuerySpec query{
         .view = current_view_,
+        .search = search_text_,
         .week_starts_on = state.settings.week_starts_on,
         .local_day = local_day};
     std::vector<std::wstring> previous_ids;
@@ -253,10 +437,38 @@ void WidgetWindow::draw() {
             layout.task_list.height));
     const auto palette = resolve_theme(state.settings.theme, read_system_theme());
     renderer_->draw(layout, palette, view_model_, current_view_,
-        service_.selection().snapshot().selected_ids, scroll_y_);
+        service_.selection().snapshot().selected_ids, scroll_y_,
+        details_panel_ && details_panel_->visible());
+    if (text_editor_) {
+        text_editor_->layout(layout, dpi_);
+        if (text_editor_->active_control() == NativeEditorControl::inline_title) {
+            const auto id = text_editor_->session_target_id();
+            const auto row = std::find_if(view_model_.rows.begin(), view_model_.rows.end(),
+                [&id](const TaskRowModel& value) { return value.id == id; });
+            if (row != view_model_.rows.end()) {
+                const auto index = static_cast<std::size_t>(row - view_model_.rows.begin());
+                const auto y = layout.task_list.y + static_cast<float>(index) * 58.0F - scroll_y_;
+                text_editor_->place_inline_title({layout.task_list.x + 48,
+                    y + 8, layout.task_list.width - 112, 42}, dpi_);
+            }
+        }
+    }
+    if (details_panel_ && details_panel_->visible()) {
+        const auto& tasks = state.tasks;
+        const auto& id = details_panel_->task_id();
+        const auto task = std::find_if(tasks.begin(), tasks.end(),
+            [&id](const Task& value) { return value.id == id; });
+        if (task == tasks.end()) {
+            details_panel_->close();
+            details_task_id_.clear();
+        } else {
+            details_panel_->layout(layout.task_list, dpi_);
+        }
+    }
 }
 
 void WidgetWindow::handle_pointer(POINT client_point) {
+    if (details_panel_ && details_panel_->visible()) return;
     const auto scale = static_cast<float>(dpi_) / 96.0F;
     const PointF logical{
         static_cast<float>(client_point.x) / scale,
@@ -296,10 +508,26 @@ void WidgetWindow::handle_pointer(POINT client_point) {
     const auto hit = hit_test_row(logical, zones);
     if (hit == RowHitArea::checkbox) {
         static_cast<void>(service_.set_completed(row.id, row.status != TaskStatus::done));
+    } else if (hit == RowHitArea::title) {
+        commit_inline_title();
+        text_editor_->begin_inline_title(row.id, row.title);
+        const auto y = layout.task_list.y + row_top;
+        text_editor_->place_inline_title({layout.task_list.x + 48,
+            y + 8, layout.task_list.width - 112, 42}, dpi_);
     } else if (hit == RowHitArea::row) {
         service_.selection().select_one(row.id);
         invalidate();
     }
+}
+
+void WidgetWindow::commit_inline_title() {
+    if (!text_editor_ || text_editor_->active_control() != NativeEditorControl::inline_title) return;
+    const auto result = text_editor_->commit_active();
+    if (!result) return;
+    TaskPatch patch;
+    patch.title = result->text;
+    static_cast<void>(service_.update_task(result->target_id, patch));
+    invalidate();
 }
 
 void WidgetWindow::clamp_to_monitor() {
@@ -317,6 +545,20 @@ void WidgetWindow::clamp_to_monitor() {
             static_cast<float>(dpi_)});
     SetWindowPos(window_, nullptr, clamped.x, clamped.y, clamped.width, clamped.height,
         SWP_NOACTIVATE | SWP_NOZORDER);
+}
+
+void WidgetWindow::ensure_details_window_height() {
+    if (window_ == nullptr) return;
+    RECT bounds{};
+    if (!GetWindowRect(window_, &bounds)) return;
+    const auto required_height = MulDiv(
+        static_cast<int>(kDetailsWindowMinimumHeight), static_cast<int>(dpi_), 96);
+    if (bounds.bottom - bounds.top < required_height) {
+        SetWindowPos(window_, nullptr, bounds.left, bounds.top,
+            bounds.right - bounds.left, required_height,
+            SWP_NOACTIVATE | SWP_NOZORDER);
+        clamp_to_monitor();
+    }
 }
 
 LRESULT WidgetWindow::hit_test(POINT screen) const {

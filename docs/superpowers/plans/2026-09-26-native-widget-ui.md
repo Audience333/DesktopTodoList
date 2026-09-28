@@ -171,19 +171,19 @@
 - Consumes: command methods on `AppService`.
 - Produces: native edit-host lifecycle `begin`, `commit`, `cancel`; detail draft `TaskPatch`; shortcuts `Ctrl+N`, `Ctrl+F`, `Esc`, `Delete`, `Alt+Up`, `Alt+Down`.
 
-- [ ] **Step 1: Write failing editor-state and native input harness checks**
+- [x] **Step 1: Write failing editor-state and native input harness checks**
 
   Assert Enter creation and refocus, blank rejection, inline Enter save/Escape cancel/focus-loss save, title click not changing selection, double-click opening details, search focus, note/priority/due/reminder/tag edits, and Chinese IME/emoji/CRLF round-trip.
 
-- [ ] **Step 2: Run editing tests and confirm failure**
+- [x] **Step 2: Run editing tests and confirm failure**
 
   Run: `ctest --preset windows-x64-debug -R editing --output-on-failure`.
 
-- [ ] **Step 3: Implement native edit controls and details panel**
+- [x] **Step 3: Implement native edit controls and details panel**
 
   Use Unicode native edit controls for composition and clipboard behavior; custom drawing may frame them but must not reimplement an IME text editor.
 
-- [ ] **Step 4: Run automated tests and interactive input harness**
+- [x] **Step 4: Run automated tests and interactive input harness**
 
   Expected: automated state tests pass; interactive items report PASS or an explicit environment SKIP, never a silent pass.
 

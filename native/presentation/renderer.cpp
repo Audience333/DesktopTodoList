@@ -21,6 +21,9 @@ Renderer::Renderer(HWND window) : window_(window) {
         static_cast<void>(write_factory_->CreateTextFormat(L"Microsoft YaHei UI", nullptr,
             DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
             DWRITE_FONT_STRETCH_NORMAL, 14.0F, L"zh-CN", &body_format_));
+        static_cast<void>(write_factory_->CreateTextFormat(L"Microsoft YaHei UI", nullptr,
+            DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
+            DWRITE_FONT_STRETCH_NORMAL, 11.0F, L"zh-CN", &note_format_));
     }
 }
 
@@ -30,6 +33,29 @@ D2D1_COLOR_F Renderer::color(std::uint32_t argb) {
         ((argb >> 8) & 0xFF) / 255.0F,
         (argb & 0xFF) / 255.0F,
         ((argb >> 24) & 0xFF) / 255.0F);
+}
+
+void Renderer::draw_highlighted_text(
+    std::wstring_view text,
+    const std::vector<HighlightSpan>& highlights,
+    HighlightField field,
+    const D2D1_RECT_F& bounds,
+    IDWriteTextFormat* format,
+    ID2D1Brush* base_brush) {
+    if (text.empty() || format == nullptr || base_brush == nullptr || !write_factory_) return;
+    Microsoft::WRL::ComPtr<IDWriteTextLayout> text_layout;
+    if (FAILED(write_factory_->CreateTextLayout(text.data(), static_cast<UINT32>(text.size()),
+        format, bounds.right - bounds.left, bounds.bottom - bounds.top, &text_layout))) return;
+    for (const auto& span : highlights) {
+        if (span.field != field || span.length == 0 || span.start > text.size() ||
+            span.length > text.size() - span.start) continue;
+        const DWRITE_TEXT_RANGE range{
+            static_cast<UINT32>(span.start), static_cast<UINT32>(span.length)};
+        static_cast<void>(text_layout->SetDrawingEffect(danger_.Get(), range));
+        static_cast<void>(text_layout->SetUnderline(TRUE, range));
+    }
+    target_->DrawTextLayout(D2D1::Point2F(bounds.left, bounds.top),
+        text_layout.Get(), base_brush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
 }
 
 bool Renderer::create_device_resources() {
@@ -71,6 +97,17 @@ void Renderer::draw(
     ViewKind view,
     const std::vector<std::wstring>& selected_ids,
     float scroll_y) {
+    draw(layout, palette, model, view, selected_ids, scroll_y, false);
+}
+
+void Renderer::draw(
+    const LayoutResult& layout,
+    const ThemePalette& palette,
+    const ViewModel& model,
+    ViewKind view,
+    const std::vector<std::wstring>& selected_ids,
+    float scroll_y,
+    bool details_open) {
     if (!create_device_resources()) return;
     foreground_.Reset();
     muted_.Reset();
@@ -95,7 +132,7 @@ void Renderer::draw(
     target_->FillRoundedRectangle(quick, surface_.Get());
     target_->DrawRoundedRectangle(quick, border_.Get(), 1.0F);
     if (title_format_ && foreground_) {
-        const auto title = D2D1::RectF(20, 14, layout.logical_client.width - 20, 48);
+        const auto title = D2D1::RectF(20, 14, 142, 48);
         target_->DrawTextW(L"桌面待办", 4, title_format_.Get(), title, foreground_.Get());
     }
     if (body_format_ && muted_) {
@@ -125,6 +162,13 @@ void Renderer::draw(
                 active ? foreground_.Get() : muted_.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
         }
 
+        if (details_open) {
+            const auto panel = D2D1::RoundedRect(D2D1::RectF(
+                layout.task_list.x, layout.task_list.y,
+                layout.task_list.right(), layout.task_list.bottom()), 10, 10);
+            target_->FillRoundedRectangle(panel, surface_.Get());
+            target_->DrawRoundedRectangle(panel, border_.Get(), 1.0F);
+        } else {
         constexpr float row_height = 58.0F;
         const auto visible = calculate_visible_range(scroll_y,
             layout.task_list.height, row_height, model.rows.size(), 2);
@@ -153,12 +197,18 @@ void Renderer::draw(
                 target_->FillRectangle(overdue, danger_.Get());
             }
             const auto title = D2D1::RectF(
-                layout.task_list.x + 50, y + 8,
-                layout.task_list.right() - 56, y + row_height - 8);
-            target_->DrawTextW(row.title.c_str(), static_cast<UINT32>(row.title.size()),
-                body_format_.Get(), title,
-                row.status == TaskStatus::done ? muted_.Get() : foreground_.Get(),
-                D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                layout.task_list.x + 50, y + 5,
+                layout.task_list.right() - 56, y + 28);
+            draw_highlighted_text(row.title, row.highlights, HighlightField::title,
+                title, body_format_.Get(),
+                row.status == TaskStatus::done ? muted_.Get() : foreground_.Get());
+            if (!row.note.empty()) {
+                const auto note = D2D1::RectF(
+                    layout.task_list.x + 50, y + 30,
+                    layout.task_list.right() - 56, y + 51);
+                draw_highlighted_text(row.note, row.highlights, HighlightField::note,
+                    note, note_format_.Get(), muted_.Get());
+            }
             const auto remove = D2D1::RectF(
                 layout.task_list.right() - 48, y + 8,
                 layout.task_list.right() - 24, y + 40);
@@ -187,6 +237,7 @@ void Renderer::draw(
             const auto summary = L"逾期 " + std::to_wstring(model.counts.overdue) + L" 项";
             target_->DrawTextW(summary.c_str(), static_cast<UINT32>(summary.size()),
                 body_format_.Get(), footer, muted_.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+        }
         }
     }
     const auto result = target_->EndDraw();
