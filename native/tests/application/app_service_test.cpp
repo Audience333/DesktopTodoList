@@ -137,7 +137,7 @@ TEST_CASE(app_service_reminder_tick_marks_delivered_and_flushes_it) {
 
     EXPECT_EQ(batch.items.size(), std::size_t{1});
     EXPECT_TRUE(!harness.service.snapshot().tasks[0].reminded_at.has_value());
-    EXPECT_TRUE(harness.service.acknowledge_reminders({L"due"}));
+    EXPECT_TRUE(harness.service.acknowledge_reminders(batch));
     EXPECT_EQ(harness.service.snapshot().tasks[0].reminded_at, std::optional{harness.now});
     EXPECT_TRUE(harness.service.flush());
     const auto persisted = desktop_todo::decode_state_utf8(
@@ -224,6 +224,61 @@ TEST_CASE(app_service_reports_recovery_status) {
     EXPECT_TRUE(std::any_of(harness.events.begin(), harness.events.end(), [](const AppEvent& event) {
         return event.type == AppEventType::recovery;
     }));
+}
+
+TEST_CASE(app_service_blocks_writes_until_corrupt_source_can_be_preserved) {
+    Harness harness;
+    const std::vector<std::byte> corrupt{std::byte{'x'}};
+    harness.files.files[key(root / L"state.json")] = corrupt;
+    harness.files.fail_operation = 1;
+
+    EXPECT_TRUE(harness.service.start());
+    EXPECT_TRUE(harness.service.add_task(AddTaskCommand{.title = L"待恢复"}).has_value());
+    EXPECT_TRUE(!harness.service.flush());
+    EXPECT_EQ(harness.files.files[key(root / L"state.json")], corrupt);
+    EXPECT_TRUE(!harness.files.exists(root / L"backups/2026-09-27.json"));
+
+    harness.files.fail_operation.reset();
+    harness.now += std::chrono::milliseconds{500};
+    EXPECT_TRUE(harness.service.maintenance());
+    EXPECT_TRUE(harness.files.exists(root / L"state.corrupt-20260927-120000.json"));
+    const auto saved = desktop_todo::decode_state_utf8(
+        harness.files.files[key(root / L"state.json")]);
+    EXPECT_EQ(saved.state->tasks[0].title, L"待恢复");
+}
+
+TEST_CASE(app_service_backup_failure_does_not_block_due_main_save) {
+    Harness harness;
+    EXPECT_TRUE(harness.service.start());
+    EXPECT_TRUE(harness.service.add_task(AddTaskCommand{.title = L"仍需保存"}).has_value());
+    harness.today = LocalDate{2026, 9, 28};
+    harness.now += std::chrono::milliseconds{500};
+    harness.files.fail_operation = harness.files.operations.size() + 1;
+
+    EXPECT_TRUE(!harness.service.maintenance());
+
+    EXPECT_TRUE(harness.files.exists(root / L"state.json"));
+    const auto saved = desktop_todo::decode_state_utf8(
+        harness.files.files[key(root / L"state.json")]);
+    EXPECT_EQ(saved.state->tasks[0].title, L"仍需保存");
+}
+
+TEST_CASE(app_service_ignores_stale_reminder_acknowledgment_after_schedule_edit) {
+    Harness harness;
+    AppState initial;
+    auto reminder = task(L"due", L"提醒", harness.now - std::chrono::hours{1});
+    reminder.due_at = harness.now - std::chrono::minutes{1};
+    initial.tasks = {reminder};
+    harness.files.files[key(root / L"state.json")] = desktop_todo::encode_state_utf8(initial);
+    EXPECT_TRUE(harness.service.start());
+    const auto old_delivery = harness.service.tick_reminders();
+    desktop_todo::TaskPatch patch;
+    patch.due_at = harness.now + std::chrono::hours{1};
+    EXPECT_TRUE(harness.service.update_task(L"due", patch));
+
+    EXPECT_TRUE(!harness.service.acknowledge_reminders(old_delivery));
+
+    EXPECT_TRUE(!harness.service.snapshot().tasks[0].reminded_at.has_value());
 }
 
 TEST_CASE(app_service_save_failure_emits_event_without_state_loss) {

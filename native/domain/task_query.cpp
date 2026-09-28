@@ -36,11 +36,13 @@ std::chrono::sys_days day_of(Clock::time_point value, std::chrono::minutes utc_o
     return std::chrono::floor<std::chrono::days>(value + utc_offset);
 }
 
+std::chrono::sys_days local_day_of(Clock::time_point value, const QuerySpec& query) {
+    return query.local_day ? query.local_day(value) : day_of(value, query.utc_offset);
+}
+
 std::pair<std::chrono::sys_days, std::chrono::sys_days> week_range(
-    Clock::time_point now,
-    int week_starts_on,
-    std::chrono::minutes utc_offset) {
-    const auto today = day_of(now, utc_offset);
+    std::chrono::sys_days today,
+    int week_starts_on) {
     const auto weekday = std::chrono::weekday{today}.c_encoding();
     const auto start_day = week_starts_on == 0 ? 0U : 1U;
     const auto offset = (weekday + 7U - start_day) % 7U;
@@ -70,15 +72,15 @@ bool matches_view(
     }
     if (query.view == ViewKind::today) {
         return *task.due_at < now ||
-            day_of(*task.due_at, query.utc_offset) == day_of(now, query.utc_offset);
+            local_day_of(*task.due_at, query) == local_day_of(now, query);
     }
     if (query.view == ViewKind::week) {
         if (*task.due_at < now) {
             return true;
         }
-        const auto [start, end] = week_range(now, query.week_starts_on, query.utc_offset);
-        const auto local_due = *task.due_at + query.utc_offset;
-        return local_due >= start && local_due < end;
+        const auto [start, end] = week_range(local_day_of(now, query), query.week_starts_on);
+        const auto due_day = local_day_of(*task.due_at, query);
+        return due_day >= start && due_day < end;
     }
     return false;
 }

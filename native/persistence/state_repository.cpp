@@ -46,7 +46,7 @@ LoadResult StateRepository::load() {
 
         const auto preserved = preserve_corrupt_source();
         if (!preserved.ok) {
-            return {{}, LoadStatus::reset, preserved.error, std::move(source_issues), {}};
+            return {{}, LoadStatus::reset, preserved.error, std::move(source_issues), {}, false};
         }
         preserved_source = preserved.path;
     }

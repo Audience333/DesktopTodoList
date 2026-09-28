@@ -1,5 +1,6 @@
 #include "application/app_service.h"
 
+#include <algorithm>
 #include <stdexcept>
 #include <utility>
 
@@ -20,11 +21,14 @@ bool AppService::start() {
     const auto load_error = loaded.error;
     auto load_issues = loaded.issues;
     const auto preserved_source = loaded.preserved_source;
+    writes_blocked_ = !loaded.writable;
     recreate_store(std::move(loaded.state));
     const auto today = today_();
-    const auto backup = repository_.ensure_daily_backup(store_->state(), today);
-    if (backup.ok) last_backup_date_ = today;
-    if (!backup.ok) emit({AppEventType::save_error, {}, {}, backup.error});
+    if (!writes_blocked_) {
+        const auto backup = repository_.ensure_daily_backup(store_->state(), today);
+        if (backup.ok) last_backup_date_ = today;
+        if (!backup.ok) emit({AppEventType::save_error, {}, {}, backup.error});
+    }
     emit({AppEventType::started});
     if (load_status == LoadStatus::repaired || load_status == LoadStatus::restored ||
         load_status == LoadStatus::reset || !load_issues.empty()) {
@@ -61,15 +65,15 @@ bool AppService::set_completed(std::wstring_view id, bool completed) {
 
 std::size_t AppService::delete_tasks(const std::vector<std::wstring>& ids) {
     const auto count = store_->delete_tasks(ids);
-    collect_change();
     prune_selection();
+    collect_change();
     return count;
 }
 
 std::size_t AppService::clear_completed(bool confirmed) {
     const auto count = store_->clear_completed(confirmed);
-    collect_change();
     prune_selection();
+    collect_change();
     return count;
 }
 
@@ -145,28 +149,55 @@ ReminderBatch AppService::tick_reminders() {
     return batch;
 }
 
-bool AppService::acknowledge_reminders(const std::vector<std::wstring>& ids) {
+bool AppService::acknowledge_reminders(const ReminderBatch& delivered) {
+    std::vector<std::wstring> ids;
+    for (const auto& item : delivered.items) {
+        const auto current = std::find_if(
+            store_->state().tasks.begin(), store_->state().tasks.end(),
+            [&item](const Task& task) { return task.id == item.task_id; });
+        if (current != store_->state().tasks.end() && current->remind &&
+            current->due_at == item.due_at && !current->reminded_at.has_value()) {
+            ids.push_back(item.task_id);
+        }
+    }
     const auto changed = store_->mark_reminded(ids, now_());
     collect_change();
     return changed;
 }
 
 bool AppService::maintenance() {
+    bool success = true;
+    if (writes_blocked_) {
+        const auto preserved = repository_.preserve_corrupt_source();
+        if (!preserved.ok) {
+            emit({AppEventType::save_error, {}, {}, preserved.error});
+            return false;
+        }
+        writes_blocked_ = false;
+    }
     const auto today = today_();
     if (!last_backup_date_.has_value() || *last_backup_date_ != today) {
         const auto backup = repository_.ensure_daily_backup(store_->state(), today);
         if (!backup.ok) {
             emit({AppEventType::save_error, {}, {}, backup.error});
-            return false;
+            success = false;
+        } else {
+            last_backup_date_ = today;
         }
-        last_backup_date_ = today;
     }
-    if (dirty_ && save_due_.has_value() && now_() >= *save_due_) return flush();
-    return true;
+    if (dirty_ && save_due_.has_value() && now_() >= *save_due_ && !flush()) {
+        success = false;
+    }
+    return success;
 }
 
 bool AppService::flush() {
     if (!dirty_) return true;
+    if (writes_blocked_) {
+        emit({AppEventType::save_error, {}, {},
+            L"State writes are blocked until recovery source is preserved"});
+        return false;
+    }
     const auto saved = repository_.save(store_->state());
     if (!saved.ok) {
         emit({AppEventType::save_error, {}, {}, saved.error});

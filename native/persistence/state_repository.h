@@ -24,6 +24,7 @@ struct LoadResult {
     std::wstring error;
     std::vector<ValidationIssue> issues;
     std::filesystem::path preserved_source;
+    bool writable = true;
 };
 
 struct SaveResult {

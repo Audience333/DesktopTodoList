@@ -56,7 +56,7 @@ public:
     [[nodiscard]] ExportResult export_to(const std::filesystem::path& destination) const;
     bool reset_to_defaults(bool confirmed);
     [[nodiscard]] ReminderBatch tick_reminders();
-    bool acknowledge_reminders(const std::vector<std::wstring>& ids);
+    bool acknowledge_reminders(const ReminderBatch& delivered);
     bool maintenance();
     bool flush();
 
@@ -80,6 +80,7 @@ private:
     bool dirty_ = false;
     std::optional<Clock::time_point> save_due_;
     std::optional<LocalDate> last_backup_date_;
+    bool writes_blocked_ = false;
 };
 
 }  // namespace desktop_todo

@@ -3,6 +3,7 @@
 #include "domain/types.h"
 
 #include <chrono>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -14,6 +15,7 @@ struct QuerySpec {
     int week_starts_on = 1;
     bool include_completed = false;
     std::chrono::minutes utc_offset{};
+    std::function<std::chrono::sys_days(Clock::time_point)> local_day;
 };
 
 struct TaskRef {

@@ -169,6 +169,7 @@ TEST_CASE(state_repository_does_not_overwrite_corrupt_source_when_preservation_f
     const auto loaded = repository.load();
 
     EXPECT_EQ(loaded.status, LoadStatus::reset);
+    EXPECT_TRUE(!loaded.writable);
     EXPECT_EQ(files.files[key(root / L"state.json")], corrupt);
     EXPECT_EQ(files.operations.size(), std::size_t{1});
 }

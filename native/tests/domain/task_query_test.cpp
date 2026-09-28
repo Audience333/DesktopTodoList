@@ -217,3 +217,20 @@ TEST_CASE(task_query_compacts_shuffled_dense_orders_by_manual_order) {
     EXPECT_EQ(tasks[1].order, 1.0);
     EXPECT_EQ(tasks[2].order, 2.0);
 }
+
+TEST_CASE(task_query_local_day_converter_handles_dst_offset_change) {
+    AppState state;
+    const auto transition = instant(2026, 11, 1, 6);
+    const auto local_day = [transition](Clock::time_point value) {
+        const auto offset = value < transition ? std::chrono::hours{-4} : std::chrono::hours{-5};
+        return std::chrono::floor<std::chrono::days>(value + offset);
+    };
+    state.tasks = {make_task(L"late-local-today", 1.0, instant(2026, 11, 2, 4, 30))};
+
+    const auto result = desktop_todo::query_tasks(
+        state,
+        QuerySpec{.view = ViewKind::today, .local_day = local_day},
+        instant(2026, 11, 1, 4, 30));
+
+    EXPECT_EQ(ids(result), std::vector<std::wstring>{L"late-local-today"});
+}
