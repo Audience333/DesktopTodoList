@@ -5,6 +5,7 @@
 #include "persistence/state_repository.h"
 #include "platform/windows/single_instance.h"
 #include "platform/windows/window_class.h"
+#include "presentation/widget_window.h"
 
 #include <shellapi.h>
 #include <shlobj.h>
@@ -17,9 +18,6 @@
 
 namespace desktop_todo {
 namespace {
-
-constexpr wchar_t kWidgetWindowClass[] = L"DesktopTodoList.WidgetWindow.v2";
-constexpr UINT_PTR kMaintenanceTimer = 1;
 
 Clock::time_point current_time() {
     return std::chrono::time_point_cast<std::chrono::milliseconds>(
@@ -84,7 +82,7 @@ public:
           repository_(files_, data_directory_, timestamp),
           service_(repository_, current_time, new_id, current_local_date,
               [this](const AppEvent&) {
-                  if (widget_ != nullptr) InvalidateRect(widget_, nullptr, FALSE);
+                  if (widget_) widget_->invalidate();
               }) {}
 
     int run(HINSTANCE instance, int show_command) {
@@ -99,31 +97,23 @@ public:
         WindowClass message_class{
             instance, single_instance_.message_window_class_name(),
             &Impl::message_window_proc, nullptr};
-        WindowClass widget_class{
-            instance, kWidgetWindowClass, &Impl::widget_window_proc,
-            reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1)};
-        if (!message_class.registered() || !widget_class.registered()) return 4;
+        if (!message_class.registered()) return 4;
 
         message_ = CreateWindowExW(0, message_class.name(), nullptr, 0,
             0, 0, 0, 0, HWND_MESSAGE, nullptr, instance, this);
         if (message_ == nullptr) return 5;
-        widget_ = CreateWindowExW(WS_EX_TOOLWINDOW, widget_class.name(), L"DesktopTodoList",
-            WS_POPUP | WS_THICKFRAME | WS_CLIPCHILDREN,
-            CW_USEDEFAULT, CW_USEDEFAULT, 360, 480,
-            nullptr, nullptr, instance, this);
-        if (widget_ == nullptr) {
-            cleanup_windows();
-            return 6;
-        }
 
         if (!service_.start()) {
             cleanup_windows();
             return 7;
         }
+
+        widget_ = std::make_unique<WidgetWindow>(service_);
+        if (!widget_->create(instance, show_command)) {
+            cleanup_windows();
+            return 6;
+        }
         handle_launch_request(launch_request);
-        SetTimer(widget_, kMaintenanceTimer, 250, nullptr);
-        ShowWindow(widget_, show_command == SW_HIDE ? SW_SHOWNORMAL : show_command);
-        UpdateWindow(widget_);
 
         MSG message{};
         BOOL message_status = 0;
@@ -168,65 +158,15 @@ private:
         return DefWindowProcW(window, message, parameter, data);
     }
 
-    static LRESULT CALLBACK widget_window_proc(
-        HWND window, UINT message, WPARAM parameter, LPARAM data) {
-        auto* self = from_window(window, message, data);
-        switch (message) {
-        case WM_TIMER:
-            if (self != nullptr && parameter == kMaintenanceTimer) {
-                static_cast<void>(self->service_.maintenance());
-            }
-            return 0;
-        case WM_PAINT: {
-            PAINTSTRUCT paint{};
-            const auto dc = BeginPaint(window, &paint);
-            RECT area{};
-            GetClientRect(window, &area);
-            const auto background = CreateSolidBrush(RGB(245, 247, 250));
-            FillRect(dc, &area, background);
-            DeleteObject(background);
-            SetBkMode(dc, TRANSPARENT);
-            SetTextColor(dc, RGB(34, 40, 49));
-            RECT title{24, 24, area.right - 24, 64};
-            DrawTextW(dc, L"桌面待办", -1, &title, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-            EndPaint(window, &paint);
-            return 0;
-        }
-        case WM_CLOSE:
-            DestroyWindow(window);
-            return 0;
-        case WM_DESTROY:
-            if (self != nullptr) {
-                KillTimer(window, kMaintenanceTimer);
-                static_cast<void>(self->service_.flush());
-                self->widget_ = nullptr;
-            }
-            PostQuitMessage(0);
-            return 0;
-        default:
-            return DefWindowProcW(window, message, parameter, data);
-        }
-    }
-
     void handle_launch_request(const LaunchRequest& request) {
         if (request.command == LaunchCommand::import_file) {
             pending_import_ = request.import_path;
         }
-        if (widget_ != nullptr) {
-            if (IsIconic(widget_)) ShowWindow(widget_, SW_RESTORE);
-            ShowWindow(widget_, SW_SHOWNORMAL);
-            if (!SetForegroundWindow(widget_)) {
-                FLASHWINFO flash{sizeof(flash), widget_, FLASHW_TRAY | FLASHW_TIMERNOFG, 3, 0};
-                FlashWindowEx(&flash);
-            }
-        }
+        if (widget_) widget_->show_and_activate();
     }
 
     void cleanup_windows() {
-        if (widget_ != nullptr) {
-            DestroyWindow(widget_);
-            widget_ = nullptr;
-        }
+        widget_.reset();
         if (message_ != nullptr) {
             DestroyWindow(message_);
             message_ = nullptr;
@@ -239,7 +179,7 @@ private:
     AppService service_;
     SingleInstance single_instance_;
     HWND message_ = nullptr;
-    HWND widget_ = nullptr;
+    std::unique_ptr<WidgetWindow> widget_;
     std::optional<std::filesystem::path> pending_import_;
 };
 

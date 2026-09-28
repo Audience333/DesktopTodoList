@@ -92,25 +92,25 @@
 - Consumes: widget HWND from Task 1 and settings snapshot from Plan 1.
 - Produces: `LayoutResult calculate_layout(SizeF client, float dpi, LayoutMode)`; `RectI clamp_to_work_area(RectI saved, MonitorInfo)`; `class Renderer` with `create_device_resources`, `draw`, `discard_device_resources`; `ThemePalette resolve_theme(Theme, SystemTheme)`.
 
-- [ ] **Step 1: Write failing pure layout and renderer-state tests**
+- [x] **Step 1: Write failing pure layout and renderer-state tests**
 
   Assert 360 x 480 default, 320 minimum width, 125/150/200% scaling, compact/expanded regions, off-screen recovery after monitor removal, system/light/dark/high-contrast palettes, reduced-motion flag, and graphics-device-loss recovery state.
 
-- [ ] **Step 2: Run presentation tests and confirm failure**
+- [x] **Step 2: Run presentation tests and confirm failure**
 
   Run: `ctest --preset windows-x64-debug -R "layout|renderer_state" --output-on-failure`.
 
   Expected: FAIL because presentation modules are absent.
 
-- [ ] **Step 3: Implement borderless DPI-aware window and Direct2D renderer**
+- [x] **Step 3: Implement borderless DPI-aware window and Direct2D renderer**
 
   Use per-monitor-v2 DPI awareness, logical-pixel layout, `WM_NCHITTEST` resize edges, a draggable title region, and resource recreation on `D2DERR_RECREATE_TARGET`. Do not use undocumented WorkerW parenting.
 
-- [ ] **Step 4: Run tests and the window smoke harness at available DPI settings**
+- [x] **Step 4: Run tests and the window smoke harness at available DPI settings**
 
   Expected: no blurry bitmap scaling, no lost window after work-area change, and no state loss after renderer recreation.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
   ```powershell
   git add native/presentation native/tests/presentation native/CMakeLists.txt
