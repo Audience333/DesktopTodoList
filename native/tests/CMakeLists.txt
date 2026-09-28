@@ -17,6 +17,7 @@ add_executable(desktop_todo_tests
   presentation/editing_test.cpp
   presentation/editor_host_smoke_test.cpp
   presentation/widget_window_smoke_test.cpp
+  presentation/pointer_controller_test.cpp
 )
 
 target_compile_features(desktop_todo_tests PRIVATE cxx_std_20)
@@ -51,3 +52,5 @@ add_test(NAME native.task_list_view COMMAND desktop_todo_tests --filter task_lis
 add_test(NAME native.editing COMMAND desktop_todo_tests --filter editing_)
 add_test(NAME native.editor_host_smoke COMMAND desktop_todo_tests --filter editor_host_smoke_)
 add_test(NAME native.widget_window_smoke COMMAND desktop_todo_tests --filter widget_window_smoke_)
+add_test(NAME native.pointer_controller COMMAND desktop_todo_tests --filter pointer_controller_)
+add_test(NAME native.selection_toolbar COMMAND desktop_todo_tests --filter selection_toolbar_)

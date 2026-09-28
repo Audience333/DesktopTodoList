@@ -41,7 +41,9 @@ public:
     [[nodiscard]] bool start();
     [[nodiscard]] std::optional<Task> add_task(const AddTaskCommand& command);
     bool update_task(std::wstring_view id, const TaskPatch& patch);
+    std::size_t update_tasks(const std::vector<std::wstring>& ids, const TaskPatch& patch);
     bool set_completed(std::wstring_view id, bool completed);
+    std::size_t set_completed_tasks(const std::vector<std::wstring>& ids, bool completed);
     std::size_t delete_tasks(const std::vector<std::wstring>& ids);
     std::size_t clear_completed(bool confirmed);
     bool reorder(std::wstring_view id, std::wstring_view target_id, DropPosition position);

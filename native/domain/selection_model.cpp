@@ -28,6 +28,20 @@ void SelectionModel::toggle(std::wstring_view id) {
     focus_id_ = value;
 }
 
+void SelectionModel::select_ids(const std::vector<std::wstring>& ids, bool append) {
+    if (!append) selected_ids_.clear();
+    selected_ids_.insert(ids.begin(), ids.end());
+    if (ids.empty()) {
+        if (!append) {
+            anchor_id_.reset();
+            focus_id_.reset();
+        }
+        return;
+    }
+    anchor_id_ = ids.front();
+    focus_id_ = ids.back();
+}
+
 void SelectionModel::select_range(
     std::wstring_view id,
     const std::vector<std::wstring>& visible_ids,

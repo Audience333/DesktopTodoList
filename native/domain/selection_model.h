@@ -18,6 +18,7 @@ class SelectionModel {
 public:
     void select_one(std::wstring_view id);
     void toggle(std::wstring_view id);
+    void select_ids(const std::vector<std::wstring>& ids, bool append);
     void select_range(
         std::wstring_view id,
         const std::vector<std::wstring>& visible_ids,

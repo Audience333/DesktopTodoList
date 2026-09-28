@@ -151,3 +151,16 @@ TEST_CASE(selection_model_keyboard_focus_starts_at_edge_and_does_not_toggle_at_b
     EXPECT_EQ(selection.move_focus(visible, -1, false), std::optional<std::wstring>{L"a"});
     EXPECT_EQ(selection.snapshot().selected_ids, std::vector<std::wstring>{L"a"});
 }
+
+TEST_CASE(selection_model_rubber_band_replaces_or_appends_noncontiguous_ids) {
+    SelectionModel selection;
+    selection.toggle(L"hidden");
+    selection.select_ids({L"a", L"c"}, false);
+    EXPECT_EQ(selection.snapshot().selected_ids, std::vector<std::wstring>({L"a", L"c"}));
+
+    selection.select_ids({L"b", L"e"}, true);
+    EXPECT_EQ(selection.snapshot().selected_ids,
+        std::vector<std::wstring>({L"a", L"b", L"c", L"e"}));
+    EXPECT_EQ(selection.snapshot().anchor_id, std::optional<std::wstring>{L"b"});
+    EXPECT_EQ(selection.snapshot().focus_id, std::optional<std::wstring>{L"e"});
+}

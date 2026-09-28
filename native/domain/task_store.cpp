@@ -97,6 +97,40 @@ bool TaskStore::update_task(std::wstring_view id, const TaskPatch& patch) {
     return true;
 }
 
+std::size_t TaskStore::update_tasks(
+    const std::vector<std::wstring>& ids,
+    const TaskPatch& patch) {
+    const std::unordered_set<std::wstring> requested(ids.begin(), ids.end());
+    std::vector<std::pair<Task*, Task>> replacements;
+    replacements.reserve(requested.size());
+    const auto timestamp = now_();
+    for (auto& current : state_.tasks) {
+        if (!requested.contains(current.id)) continue;
+        Task candidate = current;
+        if (patch.title) candidate.title = *patch.title;
+        if (patch.note) candidate.note = *patch.note;
+        if (patch.priority) candidate.priority = *patch.priority;
+        if (patch.due_at) candidate.due_at = *patch.due_at;
+        if (patch.remind) candidate.remind = *patch.remind;
+        if (patch.tags) candidate.tags = *patch.tags;
+        candidate.updated_at = timestamp;
+        auto validated = validate_task(std::move(candidate), current.order, timestamp);
+        if (!validated.task) return 0;
+        replacements.emplace_back(&current, std::move(*validated.task));
+    }
+    if (replacements.empty()) return 0;
+    save_undo();
+    std::vector<std::wstring> changed_ids;
+    changed_ids.reserve(replacements.size());
+    for (auto& [current, replacement] : replacements) {
+        replacement = reset_reminder_if_schedule_changed(*current, std::move(replacement));
+        changed_ids.push_back(current->id);
+        *current = std::move(replacement);
+    }
+    record_change(std::move(changed_ids));
+    return replacements.size();
+}
+
 bool TaskStore::set_completed(std::wstring_view id, bool completed) {
     const auto found = find_task(id);
     if (found == state_.tasks.end()) {
@@ -114,6 +148,30 @@ bool TaskStore::set_completed(std::wstring_view id, bool completed) {
     found->updated_at = timestamp;
     record_change({found->id});
     return true;
+}
+
+std::size_t TaskStore::set_completed_tasks(
+    const std::vector<std::wstring>& ids,
+    bool completed) {
+    const std::unordered_set<std::wstring> requested(ids.begin(), ids.end());
+    const auto target_status = completed ? TaskStatus::done : TaskStatus::todo;
+    std::vector<Task*> changed;
+    for (auto& task : state_.tasks) {
+        if (requested.contains(task.id) && task.status != target_status) changed.push_back(&task);
+    }
+    if (changed.empty()) return 0;
+    save_undo();
+    const auto timestamp = now_();
+    std::vector<std::wstring> changed_ids;
+    changed_ids.reserve(changed.size());
+    for (auto* task : changed) {
+        task->status = target_status;
+        task->completed_at = completed ? std::optional{timestamp} : std::nullopt;
+        task->updated_at = timestamp;
+        changed_ids.push_back(task->id);
+    }
+    record_change(std::move(changed_ids));
+    return changed.size();
 }
 
 std::size_t TaskStore::delete_tasks(const std::vector<std::wstring>& ids) {

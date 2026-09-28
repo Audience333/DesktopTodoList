@@ -108,6 +108,19 @@ void Renderer::draw(
     const std::vector<std::wstring>& selected_ids,
     float scroll_y,
     bool details_open) {
+    draw(layout, palette, model, view, selected_ids, scroll_y, details_open, {}, std::nullopt);
+}
+
+void Renderer::draw(
+    const LayoutResult& layout,
+    const ThemePalette& palette,
+    const ViewModel& model,
+    ViewKind view,
+    const std::vector<std::wstring>& selected_ids,
+    float scroll_y,
+    bool details_open,
+    const SelectionToolbarState& toolbar,
+    std::optional<RectF> selection_band) {
     if (!create_device_resources()) return;
     foreground_.Reset();
     muted_.Reset();
@@ -231,6 +244,12 @@ void Renderer::draw(
                 body_format_.Get(), empty, muted_.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
         }
         target_->PopAxisAlignedClip();
+        if (selection_band && border_ && surface_) {
+            const auto band = D2D1::RectF(selection_band->x, selection_band->y,
+                selection_band->right(), selection_band->bottom());
+            target_->FillRectangle(band, surface_.Get());
+            target_->DrawRectangle(band, foreground_.Get(), 1.0F);
+        }
         if (model.counts.overdue > 0 && muted_) {
             const auto footer = D2D1::RectF(layout.footer.x, layout.footer.y,
                 layout.footer.right(), layout.footer.bottom());
@@ -238,6 +257,33 @@ void Renderer::draw(
             target_->DrawTextW(summary.c_str(), static_cast<UINT32>(summary.size()),
                 body_format_.Get(), footer, muted_.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
         }
+        }
+    }
+    if (toolbar.visible && body_format_ && foreground_ && surface_ && border_) {
+        const auto bar = D2D1::RoundedRect(D2D1::RectF(layout.footer.x, layout.footer.y,
+            layout.footer.right(), layout.footer.bottom()), 7, 7);
+        target_->FillRoundedRectangle(bar, surface_.Get());
+        target_->DrawRoundedRectangle(bar, border_.Get(), 1.0F);
+        const auto available = layout.footer.width;
+        const auto label_width = std::min(86.0F, std::max(58.0F, available * 0.26F));
+        const auto gap = 3.0F;
+        const auto button_width = (available - label_width - gap * 5.0F) / 5.0F;
+        auto label = L"选 " + std::to_wstring(toolbar.selected_count);
+        if (toolbar.hidden_count > 0) label += L" +" + std::to_wstring(toolbar.hidden_count);
+        target_->DrawTextW(label.c_str(), static_cast<UINT32>(label.size()), body_format_.Get(),
+            D2D1::RectF(layout.footer.x + 5, layout.footer.y + 3,
+                layout.footer.x + label_width - 2, layout.footer.bottom() - 2),
+            muted_.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+        constexpr const wchar_t* labels[]{L"完", L"高", L"详", L"删", L"清"};
+        for (std::size_t index = 0; index < std::size(labels); ++index) {
+            const auto left = layout.footer.x + label_width + gap +
+                static_cast<float>(index) * (button_width + gap);
+            const auto button = D2D1::RoundedRect(D2D1::RectF(left, layout.footer.y + 2,
+                left + button_width, layout.footer.bottom() - 2), 5, 5);
+            target_->FillRoundedRectangle(button, border_.Get());
+            target_->DrawTextW(labels[index], 1, body_format_.Get(),
+                D2D1::RectF(left + 2, layout.footer.y + 3, left + button_width - 2,
+                    layout.footer.bottom() - 2), foreground_.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
         }
     }
     const auto result = target_->EndDraw();

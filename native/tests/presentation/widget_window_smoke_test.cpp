@@ -11,8 +11,6 @@
 #include <algorithm>
 #include <string_view>
 
-#include <iostream>
-
 using desktop_todo::AppService;
 using desktop_todo::Clock;
 using desktop_todo::LocalDate;
@@ -38,6 +36,9 @@ POINT client_point(const desktop_todo::PointF point, UINT dpi) {
 }
 
 void click_widget(HWND widget, UINT message, POINT point) {
+    if (message == WM_LBUTTONUP) {
+        SendMessageW(widget, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(point.x, point.y));
+    }
     SendMessageW(widget, message, 0, MAKELPARAM(point.x, point.y));
 }
 
@@ -194,6 +195,91 @@ TEST_CASE(widget_window_smoke_creates_and_destroys_integrated_native_widget) {
     EXPECT_TRUE(task_by_id(L"new-id-2")->due_at.has_value());
     EXPECT_TRUE(!task_by_id(L"new-id-2")->remind);
     EXPECT_EQ(task_by_id(L"new-id-2")->tags.size(), std::size_t{2});
+
+    RECT batch_client{};
+    GetClientRect(widget.handle(), &batch_client);
+    const auto batch_layout = desktop_todo::calculate_layout(
+        {static_cast<float>(batch_client.right), static_cast<float>(batch_client.bottom)},
+        static_cast<float>(dpi), desktop_todo::LayoutMode::compact);
+    const auto top_id = task_by_id(L"new-id-1")->order < task_by_id(L"new-id-2")->order
+        ? std::wstring{L"new-id-1"} : std::wstring{L"new-id-2"};
+    const auto bottom_id = top_id == L"new-id-1" ? std::wstring{L"new-id-2"} :
+        std::wstring{L"new-id-1"};
+    const auto drag_start = client_point({batch_layout.task_list.right() - 14,
+        batch_layout.task_list.y + 26}, dpi);
+    const auto drag_target = client_point({batch_layout.task_list.right() - 14,
+        batch_layout.task_list.y + 58 + 46}, dpi);
+    SendMessageW(widget.handle(), WM_LBUTTONDOWN, MK_LBUTTON,
+        MAKELPARAM(drag_start.x, drag_start.y));
+    EXPECT_TRUE(GetCapture() == widget.handle());
+    SendMessageW(widget.handle(), WM_MOUSEMOVE, MK_LBUTTON,
+        MAKELPARAM(drag_target.x, drag_target.y));
+    SendMessageW(widget.handle(), WM_LBUTTONUP, 0,
+        MAKELPARAM(drag_target.x, drag_target.y));
+    EXPECT_TRUE(GetCapture() != widget.handle());
+    EXPECT_TRUE(task_by_id(top_id)->order > task_by_id(bottom_id)->order);
+
+    const auto band_start = client_point({batch_layout.task_list.x + 4,
+        batch_layout.task_list.y + 2 * 58.0F + 12}, dpi);
+    const auto band_end = client_point({batch_layout.task_list.right() - 4,
+        batch_layout.task_list.y + 8}, dpi);
+    SendMessageW(widget.handle(), WM_LBUTTONDOWN, MK_LBUTTON,
+        MAKELPARAM(band_start.x, band_start.y));
+    SendMessageW(widget.handle(), WM_MOUSEMOVE, MK_LBUTTON,
+        MAKELPARAM(band_end.x, band_end.y));
+    EXPECT_TRUE(GetCapture() == widget.handle());
+    SendMessageW(widget.handle(), WM_LBUTTONUP, 0,
+        MAKELPARAM(band_end.x, band_end.y));
+    EXPECT_EQ(service.selection().snapshot().selected_ids.size(), std::size_t{2});
+    EXPECT_TRUE(GetCapture() != widget.handle());
+
+    const auto toolbar_click = [&widget, dpi](std::size_t action_index) {
+        RECT client{};
+        GetClientRect(widget.handle(), &client);
+        const auto layout = desktop_todo::calculate_layout(
+            {static_cast<float>(client.right), static_cast<float>(client.bottom)},
+            static_cast<float>(dpi), desktop_todo::LayoutMode::compact);
+        const auto label_width = std::min(86.0F, std::max(58.0F, layout.footer.width * 0.26F));
+        constexpr float gap = 3.0F;
+        const auto button_width = (layout.footer.width - label_width - gap * 5.0F) / 5.0F;
+        const auto x = layout.footer.x + label_width + gap +
+            static_cast<float>(action_index) * (button_width + gap) + button_width / 2;
+        click_widget(widget.handle(), WM_LBUTTONUP,
+            client_point({x, layout.footer.y + 14}, dpi));
+        UpdateWindow(widget.handle());
+    };
+
+    toolbar_click(1);
+    EXPECT_EQ(task_by_id(L"new-id-1")->priority, desktop_todo::Priority::high);
+    EXPECT_EQ(task_by_id(L"new-id-2")->priority, desktop_todo::Priority::high);
+    toolbar_click(0);
+    EXPECT_EQ(task_by_id(L"new-id-1")->status, desktop_todo::TaskStatus::done);
+    EXPECT_EQ(task_by_id(L"new-id-2")->status, desktop_todo::TaskStatus::done);
+
+    toolbar_click(2);
+    EXPECT_TRUE(GetDlgItem(widget.handle(), 532) != nullptr);
+    SetWindowTextW(GetDlgItem(widget.handle(), 532), L"批量备注");
+    SendMessageW(GetDlgItem(widget.handle(), 534), CB_SETCURSEL, 0, 0);
+    SetWindowTextW(GetDlgItem(widget.handle(), 536), L"2026-12-31 18:45");
+    SetWindowTextW(GetDlgItem(widget.handle(), 538), L"批量,共享");
+    SendMessageW(widget.handle(), WM_COMMAND,
+        MAKEWPARAM(desktop_todo::kDetailsSaveControlId, BN_CLICKED),
+        reinterpret_cast<LPARAM>(GetDlgItem(widget.handle(),
+            desktop_todo::kDetailsSaveControlId)));
+    EXPECT_EQ(task_by_id(L"new-id-1")->note, L"批量备注");
+    EXPECT_EQ(task_by_id(L"new-id-2")->note, L"批量备注");
+    EXPECT_EQ(task_by_id(L"new-id-1")->priority, desktop_todo::Priority::low);
+    EXPECT_EQ(task_by_id(L"new-id-2")->priority, desktop_todo::Priority::low);
+    EXPECT_TRUE(task_by_id(L"new-id-1")->due_at.has_value());
+    EXPECT_TRUE(task_by_id(L"new-id-2")->due_at.has_value());
+    EXPECT_EQ(task_by_id(L"new-id-1")->tags.size(), std::size_t{2});
+    EXPECT_EQ(task_by_id(L"new-id-2")->tags.size(), std::size_t{2});
+
+    toolbar_click(3);
+    EXPECT_TRUE(service.snapshot().tasks.empty());
+    EXPECT_TRUE(service.undo());
+    EXPECT_EQ(service.snapshot().tasks.size(), std::size_t{2});
+    EXPECT_TRUE(!service.undo());
 
     widget.destroy();
     EXPECT_TRUE(widget.handle() == nullptr);

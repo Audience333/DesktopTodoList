@@ -22,6 +22,8 @@ add_library(desktop_todo_core STATIC
   presentation/details_panel.cpp
   presentation/editor_session.cpp
   presentation/layout.cpp
+  presentation/pointer_controller.cpp
+  presentation/selection_toolbar.cpp
   presentation/task_list_view.cpp
   presentation/theme.cpp
   presentation/view_model.cpp

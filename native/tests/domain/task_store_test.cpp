@@ -126,6 +126,34 @@ TEST_CASE(task_store_update_preserves_identity_and_creation_time) {
     EXPECT_EQ(store.state().tasks[0].updated_at, now);
 }
 
+TEST_CASE(task_store_batch_patch_and_completion_each_undo_as_one_action) {
+    Clock::time_point now{std::chrono::milliseconds{1'800'000'000'000}};
+    int next_id = 1;
+    auto store = store_with(
+        {existing_task(L"a", L"A", 1.0), existing_task(L"b", L"B", 2.0)},
+        now,
+        next_id);
+    TaskPatch patch;
+    patch.priority = Priority::high;
+    patch.tags = std::vector<std::wstring>{L"work"};
+
+    EXPECT_EQ(store.update_tasks({L"a", L"b", L"missing"}, patch), std::size_t{2});
+    EXPECT_EQ(store.state().tasks[0].priority, Priority::high);
+    EXPECT_EQ(store.state().tasks[1].tags, std::vector<std::wstring>{L"work"});
+    EXPECT_TRUE(store.undo());
+    EXPECT_EQ(store.state().tasks[0].priority, Priority::medium);
+    EXPECT_TRUE(store.state().tasks[1].tags.empty());
+    EXPECT_TRUE(!store.undo());
+
+    EXPECT_EQ(store.set_completed_tasks({L"a", L"b"}, true), std::size_t{2});
+    EXPECT_EQ(store.state().tasks[0].status, TaskStatus::done);
+    EXPECT_EQ(store.state().tasks[1].status, TaskStatus::done);
+    EXPECT_TRUE(store.undo());
+    EXPECT_EQ(store.state().tasks[0].status, TaskStatus::todo);
+    EXPECT_EQ(store.state().tasks[1].status, TaskStatus::todo);
+    EXPECT_TRUE(!store.undo());
+}
+
 TEST_CASE(task_store_completion_sets_and_clears_timestamp) {
     Clock::time_point now{std::chrono::milliseconds{1'800'000'000'000}};
     int next_id = 1;

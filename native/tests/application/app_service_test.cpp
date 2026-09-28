@@ -87,6 +87,37 @@ TEST_CASE(app_service_commands_are_dirty_until_forced_flush) {
         harness.files.files[key(root / L"state.json")]).state->tasks.size(), std::size_t{1});
 }
 
+TEST_CASE(app_service_batch_mutations_are_single_undoable_commands) {
+    Harness harness;
+    EXPECT_TRUE(harness.service.start());
+    AppState initial;
+    initial.tasks = {task(L"a", L"A", harness.now), task(L"b", L"B", harness.now)};
+    auto prepared = harness.service.prepare_import(
+        desktop_todo::encode_state_utf8(initial), ImportMode::replace);
+    EXPECT_TRUE(harness.service.accept_import(std::move(prepared)));
+
+    desktop_todo::TaskPatch patch;
+    patch.priority = desktop_todo::Priority::high;
+    patch.tags = std::vector<std::wstring>{L"work"};
+    EXPECT_EQ(harness.service.update_tasks({L"a", L"b"}, patch), std::size_t{2});
+    EXPECT_TRUE(harness.service.can_undo());
+    EXPECT_TRUE(harness.service.undo());
+    EXPECT_EQ(harness.service.snapshot().tasks[0].priority, desktop_todo::Priority::medium);
+    EXPECT_TRUE(harness.service.snapshot().tasks[1].tags.empty());
+    EXPECT_TRUE(!harness.service.undo());
+
+    EXPECT_EQ(harness.service.set_completed_tasks({L"a", L"b"}, true), std::size_t{2});
+    EXPECT_TRUE(harness.service.undo());
+    EXPECT_EQ(harness.service.snapshot().tasks[0].status, desktop_todo::TaskStatus::todo);
+    EXPECT_EQ(harness.service.snapshot().tasks[1].status, desktop_todo::TaskStatus::todo);
+    EXPECT_TRUE(!harness.service.undo());
+
+    EXPECT_EQ(harness.service.delete_tasks({L"a", L"b"}), std::size_t{2});
+    EXPECT_TRUE(harness.service.undo());
+    EXPECT_EQ(harness.service.snapshot().tasks.size(), std::size_t{2});
+    EXPECT_TRUE(!harness.service.undo());
+}
+
 TEST_CASE(app_service_import_requires_acceptance_and_can_export) {
     Harness harness;
     EXPECT_TRUE(harness.service.start());

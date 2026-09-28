@@ -1,6 +1,9 @@
 #pragma once
 
 #define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #include <d2d1.h>
 #include <dwrite.h>
@@ -9,8 +12,10 @@
 #include "presentation/layout.h"
 #include "presentation/view_model.h"
 #include "presentation/theme.h"
+#include "presentation/selection_toolbar.h"
 
 #include <cstddef>
+#include <optional>
 #include <string_view>
 
 namespace desktop_todo {
@@ -56,6 +61,16 @@ public:
         const std::vector<std::wstring>& selected_ids,
         float scroll_y,
         bool details_open);
+    void draw(
+        const LayoutResult& layout,
+        const ThemePalette& palette,
+        const ViewModel& model,
+        ViewKind view,
+        const std::vector<std::wstring>& selected_ids,
+        float scroll_y,
+        bool details_open,
+        const SelectionToolbarState& toolbar,
+        std::optional<RectF> selection_band);
 
 private:
     static D2D1_COLOR_F color(std::uint32_t argb);

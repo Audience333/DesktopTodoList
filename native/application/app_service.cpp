@@ -76,8 +76,22 @@ bool AppService::update_task(std::wstring_view id, const TaskPatch& patch) {
     return changed;
 }
 
+std::size_t AppService::update_tasks(const std::vector<std::wstring>& ids, const TaskPatch& patch) {
+    const auto changed = store_->update_tasks(ids, patch);
+    collect_change();
+    return changed;
+}
+
 bool AppService::set_completed(std::wstring_view id, bool completed) {
     const auto changed = store_->set_completed(id, completed);
+    collect_change();
+    return changed;
+}
+
+std::size_t AppService::set_completed_tasks(
+    const std::vector<std::wstring>& ids,
+    bool completed) {
+    const auto changed = store_->set_completed_tasks(ids, completed);
     collect_change();
     return changed;
 }

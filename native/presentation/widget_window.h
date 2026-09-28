@@ -7,13 +7,17 @@
 #include <memory>
 
 #include "domain/types.h"
+#include "presentation/pointer_controller.h"
+#include "presentation/selection_toolbar.h"
 #include "presentation/view_model.h"
 
 namespace desktop_todo {
 
 class AppService;
 class DetailsPanel;
+class PointerController;
 class Renderer;
+class SelectionToolbar;
 class TextEditor;
 class WindowClass;
 
@@ -37,14 +41,25 @@ private:
     void clamp_to_monitor();
     void ensure_details_window_height();
     void commit_inline_title();
+    void handle_pointer_down(POINT client_point);
+    void handle_pointer_move(POINT client_point);
+    void handle_pointer_up(POINT client_point);
     void handle_pointer(POINT client_point);
+    [[nodiscard]] std::vector<std::wstring> visible_task_ids() const;
+    [[nodiscard]] std::vector<PointerRowBounds> visible_task_bounds() const;
+    void handle_pointer_action(const PointerAction& action);
+    void handle_toolbar_action(SelectionToolbarAction action);
+    void update_selection_toolbar();
+    void cancel_pointer_gesture();
     [[nodiscard]] LRESULT hit_test(POINT screen) const;
 
     AppService& service_;
     std::unique_ptr<WindowClass> window_class_;
     std::unique_ptr<Renderer> renderer_;
     std::unique_ptr<DetailsPanel> details_panel_;
+    std::unique_ptr<PointerController> pointer_controller_;
     std::unique_ptr<TextEditor> text_editor_;
+    std::unique_ptr<SelectionToolbar> selection_toolbar_;
     HWND window_ = nullptr;
     UINT dpi_ = 96;
     ViewKind current_view_ = ViewKind::today;
@@ -52,6 +67,8 @@ private:
     float scroll_y_ = 0;
     std::wstring search_text_;
     std::wstring details_task_id_;
+    bool details_batch_ = false;
+    std::optional<RectF> selection_band_;
 };
 
 }  // namespace desktop_todo
