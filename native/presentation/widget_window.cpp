@@ -4,9 +4,13 @@
 #include "platform/windows/window_class.h"
 #include "presentation/layout.h"
 #include "presentation/renderer.h"
+#include "presentation/task_list_view.h"
 #include "presentation/theme.h"
 
 #include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <utility>
 #include <windowsx.h>
 
 namespace desktop_todo {
@@ -30,6 +34,36 @@ SystemTheme read_system_theme() {
         .dark = theme_status == ERROR_SUCCESS && light_theme == 0,
         .high_contrast = (contrast.dwFlags & HCF_HIGHCONTRASTON) != 0,
         .reduced_motion = animations == FALSE};
+}
+
+Clock::time_point now() {
+    return std::chrono::time_point_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now());
+}
+
+std::chrono::sys_days local_day(Clock::time_point instant) {
+    constexpr std::int64_t windows_epoch_offset_ms = 11'644'473'600'000LL;
+    const auto ticks = static_cast<ULONGLONG>(
+        instant.time_since_epoch().count() + windows_epoch_offset_ms) * 10'000ULL;
+    ULARGE_INTEGER value{};
+    value.QuadPart = ticks;
+    FILETIME utc_file_time{value.LowPart, value.HighPart};
+    SYSTEMTIME utc{};
+    SYSTEMTIME local{};
+    if (!FileTimeToSystemTime(&utc_file_time, &utc) ||
+        !SystemTimeToTzSpecificLocalTimeEx(nullptr, &utc, &local)) {
+        return std::chrono::floor<std::chrono::days>(instant);
+    }
+    return std::chrono::sys_days{
+        std::chrono::year{local.wYear} / local.wMonth / local.wDay};
+}
+
+LayoutResult current_layout(HWND window, UINT dpi) {
+    RECT client{};
+    GetClientRect(window, &client);
+    return calculate_layout(
+        {static_cast<float>(client.right), static_cast<float>(client.bottom)},
+        static_cast<float>(dpi), LayoutMode::compact);
 }
 
 }  // namespace
@@ -142,6 +176,24 @@ LRESULT WidgetWindow::handle_message(UINT message, WPARAM wparam, LPARAM lparam)
         if (renderer_) renderer_->resize(LOWORD(lparam), HIWORD(lparam));
         invalidate();
         return 0;
+    case WM_LBUTTONUP:
+        handle_pointer({GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)});
+        return 0;
+    case WM_MOUSEWHEEL: {
+        POINT point{GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)};
+        ScreenToClient(window_, &point);
+        const auto layout = current_layout(window_, dpi_);
+        const auto logical_x = static_cast<float>(point.x) / (static_cast<float>(dpi_) / 96.0F);
+        const auto logical_y = static_cast<float>(point.y) / (static_cast<float>(dpi_) / 96.0F);
+        if (logical_x >= layout.task_list.x && logical_x < layout.task_list.right() &&
+            logical_y >= layout.task_list.y && logical_y < layout.task_list.bottom()) {
+            const auto wheel = GET_WHEEL_DELTA_WPARAM(wparam);
+            scroll_y_ = std::max(0.0F, scroll_y_ -
+                static_cast<float>(wheel) / WHEEL_DELTA * 3.0F * 58.0F);
+            invalidate();
+        }
+        return 0;
+    }
     case WM_SETTINGCHANGE:
     case WM_THEMECHANGED:
         invalidate();
@@ -176,13 +228,78 @@ LRESULT WidgetWindow::handle_message(UINT message, WPARAM wparam, LPARAM lparam)
 
 void WidgetWindow::draw() {
     if (!renderer_) return;
-    RECT client{};
-    GetClientRect(window_, &client);
-    const auto layout = calculate_layout(
-        {static_cast<float>(client.right), static_cast<float>(client.bottom)},
-        static_cast<float>(dpi_), LayoutMode::compact);
-    const auto palette = resolve_theme(service_.snapshot().settings.theme, read_system_theme());
-    renderer_->draw(layout, palette);
+    const auto& state = service_.snapshot();
+    QuerySpec query{
+        .view = current_view_,
+        .week_starts_on = state.settings.week_starts_on,
+        .local_day = local_day};
+    std::vector<std::wstring> previous_ids;
+    previous_ids.reserve(view_model_.rows.size());
+    for (const auto& row : view_model_.rows) previous_ids.push_back(row.id);
+    const auto anchor_index = static_cast<std::size_t>(scroll_y_ / 58.0F);
+    const auto anchor_offset = std::fmod(scroll_y_, 58.0F);
+    auto next_model = build_view_model(state, query, now());
+    if (!previous_ids.empty() && !next_model.rows.empty()) {
+        std::vector<std::wstring> next_ids;
+        next_ids.reserve(next_model.rows.size());
+        for (const auto& row : next_model.rows) next_ids.push_back(row.id);
+        scroll_y_ = static_cast<float>(preserve_scroll_anchor(
+            previous_ids, next_ids, anchor_index)) * 58.0F + anchor_offset;
+    }
+    view_model_ = std::move(next_model);
+    const auto layout = current_layout(window_, dpi_);
+    scroll_y_ = std::clamp(scroll_y_, 0.0F,
+        std::max(0.0F, static_cast<float>(view_model_.rows.size()) * 58.0F -
+            layout.task_list.height));
+    const auto palette = resolve_theme(state.settings.theme, read_system_theme());
+    renderer_->draw(layout, palette, view_model_, current_view_,
+        service_.selection().snapshot().selected_ids, scroll_y_);
+}
+
+void WidgetWindow::handle_pointer(POINT client_point) {
+    const auto scale = static_cast<float>(dpi_) / 96.0F;
+    const PointF logical{
+        static_cast<float>(client_point.x) / scale,
+        static_cast<float>(client_point.y) / scale};
+    const auto layout = current_layout(window_, dpi_);
+    if (logical.x >= layout.tabs.x && logical.x < layout.tabs.right() &&
+        logical.y >= layout.tabs.y && logical.y < layout.tabs.bottom()) {
+        const auto tab_width = layout.tabs.width / 4.0F;
+        const auto index = static_cast<std::size_t>(
+            (logical.x - layout.tabs.x) / tab_width);
+        constexpr ViewKind views[]{ViewKind::today, ViewKind::week, ViewKind::all, ViewKind::done};
+        if (index < std::size(views) && current_view_ != views[index]) {
+            current_view_ = views[index];
+            scroll_y_ = 0;
+            view_model_ = {};
+            invalidate();
+        }
+        return;
+    }
+    if (logical.y < layout.task_list.y || logical.y >= layout.task_list.bottom()) return;
+    const auto local_y = logical.y - layout.task_list.y + scroll_y_;
+    if (local_y < 0) return;
+    const auto index = static_cast<std::size_t>(local_y / 58.0F);
+    if (index >= view_model_.rows.size()) return;
+    const auto& row = view_model_.rows[index];
+    const auto row_top = static_cast<float>(index) * 58.0F - scroll_y_;
+    const RowHitZones zones{
+        .row = {layout.task_list.x, layout.task_list.y + row_top,
+            layout.task_list.width, 58.0F},
+        .checkbox = {layout.task_list.x + 10, layout.task_list.y + row_top + 17, 22, 22},
+        .title = {layout.task_list.x + 50, layout.task_list.y + row_top + 8,
+            layout.task_list.width - 106, 42},
+        .delete_button = {layout.task_list.right() - 48,
+            layout.task_list.y + row_top + 8, 24, 32},
+        .drag_handle = {layout.task_list.right() - 24,
+            layout.task_list.y + row_top + 8, 16, 32}};
+    const auto hit = hit_test_row(logical, zones);
+    if (hit == RowHitArea::checkbox) {
+        static_cast<void>(service_.set_completed(row.id, row.status != TaskStatus::done));
+    } else if (hit == RowHitArea::row) {
+        service_.selection().select_one(row.id);
+        invalidate();
+    }
 }
 
 void WidgetWindow::clamp_to_monitor() {

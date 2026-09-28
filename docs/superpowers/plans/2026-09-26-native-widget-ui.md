@@ -132,23 +132,23 @@
 - Consumes: `AppService::snapshot`, `query_tasks`, and app events from Plan 1.
 - Produces: `class ViewModel` translating snapshots to display rows; `VisibleRange calculate_visible_range(float scroll_y, float viewport_height, float row_height, size_t count, size_t overscan)`; hit-test results for checkbox, title, row, delete, and drag handle.
 
-- [ ] **Step 1: Write failing view-model and virtualization tests**
+- [x] **Step 1: Write failing view-model and virtualization tests**
 
   Cover four view counts, empty states, overdue color token, highlighted search spans, 0/1/200/1,000 rows, viewport overscan, stable scroll anchor after update, and non-overlapping hit targets.
 
-- [ ] **Step 2: Run task-list tests and confirm failure**
+- [x] **Step 2: Run task-list tests and confirm failure**
 
   Run: `ctest --preset windows-x64-debug -R task_list_view --output-on-failure`.
 
-- [ ] **Step 3: Implement view model, virtual list, scrolling, and view tabs**
+- [x] **Step 3: Implement view model, virtual list, scrolling, and view tabs**
 
   Render only visible rows plus two rows of overscan. Accessibility and keyboard focus must refer to logical task IDs rather than recycled visual indices.
 
-- [ ] **Step 4: Run tests and Release rendering benchmark**
+- [x] **Step 4: Run tests and Release rendering benchmark**
 
   Expected: 1,000-task snapshot updates and first visible render complete within the spec's 200 ms budget on the recorded host.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
   ```powershell
   git add native/presentation native/tests/presentation native/CMakeLists.txt

@@ -52,4 +52,5 @@ TEST_CASE(layout_theme_resolves_system_dark_high_contrast_and_motion) {
     EXPECT_TRUE(dark.reduced_motion);
     EXPECT_TRUE(contrast.high_contrast);
     EXPECT_TRUE(contrast.background != contrast.foreground);
+    EXPECT_TRUE(light.danger != light.foreground);
 }

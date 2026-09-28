@@ -19,6 +19,7 @@ struct ThemePalette {
     std::uint32_t muted = 0;
     std::uint32_t accent = 0;
     std::uint32_t border = 0;
+    std::uint32_t danger = 0;
     bool high_contrast = false;
     bool reduced_motion = false;
 };

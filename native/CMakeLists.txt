@@ -20,7 +20,9 @@ add_library(desktop_todo_core STATIC
   persistence/win32_file_system.cpp
   platform/windows/single_instance.cpp
   presentation/layout.cpp
+  presentation/task_list_view.cpp
   presentation/theme.cpp
+  presentation/view_model.cpp
 )
 target_include_directories(desktop_todo_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(desktop_todo_core PUBLIC desktop_todo_options Advapi32 WindowsApp)

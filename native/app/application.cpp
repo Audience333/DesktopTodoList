@@ -19,6 +19,8 @@
 namespace desktop_todo {
 namespace {
 
+constexpr UINT kShowExistingWidgetMessage = WM_APP + 0x31;
+
 Clock::time_point current_time() {
     return std::chrono::time_point_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now());
@@ -140,6 +142,10 @@ private:
     static LRESULT CALLBACK message_window_proc(
         HWND window, UINT message, WPARAM parameter, LPARAM data) {
         auto* self = from_window(window, message, data);
+        if (message == kShowExistingWidgetMessage && self != nullptr) {
+            self->handle_launch_request({LaunchCommand::show, {}});
+            return 0;
+        }
         if (message == WM_COPYDATA && self != nullptr) {
             const auto* copy = reinterpret_cast<const COPYDATASTRUCT*>(data);
             if (copy == nullptr || copy->dwData != kLaunchCopyDataId || copy->lpData == nullptr ||
@@ -152,10 +158,16 @@ private:
             if (text[count - 1] != L'\0' || wcsnlen_s(text, count) != count - 1) return FALSE;
             const auto request = decode_launch_request({text, count - 1});
             if (!request.has_value()) return FALSE;
-            self->handle_launch_request(*request);
-            return TRUE;
+            return self->queue_launch_request(*request) ? TRUE : FALSE;
         }
         return DefWindowProcW(window, message, parameter, data);
+    }
+
+    bool queue_launch_request(const LaunchRequest& request) {
+        if (request.command == LaunchCommand::import_file) {
+            pending_import_ = request.import_path;
+        }
+        return PostMessageW(message_, kShowExistingWidgetMessage, 0, 0) != FALSE;
     }
 
     void handle_launch_request(const LaunchRequest& request) {

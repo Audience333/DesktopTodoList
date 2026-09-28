@@ -6,6 +6,9 @@
 
 #include <memory>
 
+#include "domain/types.h"
+#include "presentation/view_model.h"
+
 namespace desktop_todo {
 
 class AppService;
@@ -30,6 +33,7 @@ private:
     LRESULT handle_message(UINT message, WPARAM wparam, LPARAM lparam);
     void draw();
     void clamp_to_monitor();
+    void handle_pointer(POINT client_point);
     [[nodiscard]] LRESULT hit_test(POINT screen) const;
 
     AppService& service_;
@@ -37,6 +41,9 @@ private:
     std::unique_ptr<Renderer> renderer_;
     HWND window_ = nullptr;
     UINT dpi_ = 96;
+    ViewKind current_view_ = ViewKind::today;
+    ViewModel view_model_;
+    float scroll_y_ = 0;
 };
 
 }  // namespace desktop_todo
