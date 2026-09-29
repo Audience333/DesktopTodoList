@@ -28,7 +28,7 @@ This matrix maps each requirement identifier in `docs/需求文档.md` exactly o
 | FR-41 | PASS | `native.state_repository`, `native.json_codec` — validation and recovery. |
 | FR-42 | PASS | `native.import_export`, `native.data_transfer_dialog` — JSON transfer modes. |
 | FR-43 | PASS | `native.state_repository` — daily backup retention. |
-| FR-44 | PASS | `native.state_repository`, `native.app_service` — native filesystem failure reporting; browser quota handling is superseded by native storage. |
+| FR-44 | PASS | `native.state_repository`, `native.app_service` — native filesystem write-failure reporting and export guidance. |
 | FR-50 | PASS | `native.settings_panel`, `native.renderer_state` — system/light/dark theme state. |
 | FR-51 | PASS | `native.widget_window_smoke`, `native.editing`, `native.hotkey_service` — keyboard commands. |
 | FR-52 | SKIP | `native.tray_menu`, `docs/acceptance/native-widget.md`; live tray/close behavior not re-tested in this release gate. Environment: interactive Windows desktop. Owner: release tester. |

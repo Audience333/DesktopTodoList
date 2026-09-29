@@ -245,7 +245,7 @@
 
   Mark unavailable real ARM64, Windows 10, DPI, notification, or accessibility checks as “待对应环境验收” with environment and owner; never convert them to PASS using mocks.
 
-- [ ] **Step 4: Run the complete release gate from a clean build directory**
+- [x] **Step 4: Run the complete release gate from a clean build directory**
 
   Expected: zero exit code; all automatable rows PASS; remaining manual rows are explicit and release-visible.
 
@@ -271,19 +271,19 @@
 - Consumes: successful final release gate and explicit evidence mapping every legacy behavior to native coverage.
 - Produces: a repository whose active product is unambiguously the native `.exe`, while legacy implementation remains recoverable from Git history.
 
-- [ ] **Step 1: Add a failing legacy-runtime absence check to the release gate**
+- [x] **Step 1: Add a failing legacy-runtime absence check to the release gate**
 
   Assert no public artifact contains `.html`, runtime `.js`, `launcher.ps1`, `msedge`, `WebView`, localhost server code, or batch-file launch instructions.
 
-- [ ] **Step 2: Run the gate before retirement and confirm it identifies legacy distribution paths**
+- [x] **Step 2: Run the absence check before retirement and confirm it identifies legacy distribution paths**
 
   Expected: FAIL until active build/package/docs references are removed.
 
-- [ ] **Step 3: Remove only superseded runtime paths and update the PRD implementation clauses**
+- [x] **Step 3: Remove only superseded runtime paths and update the PRD implementation clauses**
 
   Preserve requirement behavior. Replace obsolete NFR-04/NFR-09/NFR-10 and storage/architecture sections with the approved native design, while retaining history through Git rather than an active legacy folder.
 
-- [ ] **Step 4: Run the full clean release verification again**
+- [x] **Step 4: Run the full clean release verification again**
 
   Expected: release gate passes, native JSON migration fixture still passes, and no browser-era runtime file appears in public artifacts.
 

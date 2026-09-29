@@ -37,10 +37,9 @@ try {
       '-BuildDirectory',$nativeBuildPath
     )
   }
-  Invoke-TestGroup -Name 'JavaScript' -File 'node.exe' -Arguments @('tests/run-tests.js')
-  Invoke-TestGroup -Name 'Server' -File 'powershell.exe' -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File','tests/test-server.ps1')
-  Invoke-TestGroup -Name 'Window' -File 'powershell.exe' -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File','tests/test-window.ps1')
   Invoke-TestGroup -Name 'Release Documentation' -File 'pwsh.exe' -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File','native/tests/release/documentation-check.ps1')
+  Invoke-TestGroup -Name 'Release Workflow Configuration' -File 'pwsh.exe' -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File','native/tests/release/workflow-config.ps1')
+  Invoke-TestGroup -Name 'Legacy Runtime Retirement' -File 'pwsh.exe' -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File','native/tests/release/legacy-runtime-absence.ps1')
   Invoke-TestGroup -Name 'Release Gate Fail-Closed Contract' -File 'pwsh.exe' -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File','native/tests/release/verification-gate-contract.ps1')
 } finally {
   Pop-Location

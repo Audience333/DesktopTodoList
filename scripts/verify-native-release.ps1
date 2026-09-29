@@ -160,6 +160,18 @@ Invoke-Check 'No browser, script-host, localhost, or remote runtime dependency' 
   'runtime source and available executable strings have no forbidden host/network dependency'
 }
 
+$legacyAbsenceCheck = Join-Path $root 'native\tests\release\legacy-runtime-absence.ps1'
+Invoke-Check 'Legacy browser runtime and obsolete tests are retired' {
+  if (-not (Test-Path -LiteralPath $legacyAbsenceCheck -PathType Leaf)) { throw 'Legacy runtime absence check is missing.' }
+  $pwshCommand = Get-Command 'pwsh.exe' -ErrorAction SilentlyContinue
+  if (-not $pwshCommand) { throw 'PowerShell 7 (pwsh.exe) is required for the legacy runtime check.' }
+  $output = @(& $pwshCommand.Source -NoProfile -ExecutionPolicy Bypass -File $legacyAbsenceCheck 2>&1)
+  $code = $LASTEXITCODE
+  $output | ForEach-Object { Write-Host "  $_" }
+  if ($code -ne 0) { throw "Legacy runtime absence check exited $code." }
+  [string]($output | Select-Object -Last 1)
+}
+
 $manifestScript = Join-Path $root 'scripts\release-manifest.ps1'
 Invoke-Check 'Architecture/version/signature/checksum release manifest' {
   if (-not (Test-Path -LiteralPath $artifactPath -PathType Container)) { throw "Artifact directory not found: $artifactPath" }
