@@ -34,7 +34,29 @@ try {
   }
   Write-Output 'PASS: rejects a legacy runtime marker embedded in a public executable.'
 
+  [IO.File]::WriteAllBytes((Join-Path $artifactRoot 'DesktopTodoList-x64.exe'), [Text.Encoding]::ASCII.GetBytes('MZ embedded-widget.js'))
+  $resourceResult = Invoke-LegacyCheck -Root $fixtureRoot -ArtifactsDirectory $artifactRoot
+  if ($resourceResult.ExitCode -eq 0 -or $resourceResult.Output -notmatch 'embedded web resource') {
+    throw 'The legacy check did not reject an embedded web-resource extension.'
+  }
+  Write-Output 'PASS: rejects an embedded HTML/JavaScript resource filename.'
+
+  $installerDirectory = Join-Path $fixtureRoot 'installer'
+  New-Item -ItemType Directory -Path $installerDirectory -Force | Out-Null
+  $installerScript = Join-Path $installerDirectory 'DesktopTodoList.iss'
+  $allowedSources = @('ExePath', 'ReadmePath', 'PrivacyPath', 'LicensePath', 'InstallGuidePath', 'MigrationGuidePath', 'TroubleshootingGuidePath')
+  $installerLines = @($allowedSources | ForEach-Object { 'Source: "{#' + $_ + '}"; DestDir: "{app}"' })
+  $installerLines += 'Source: "{#LegacyHtmlPath}"; DestDir: "{app}"'
+  [IO.File]::WriteAllLines($installerScript, $installerLines)
+  $installerResult = Invoke-LegacyCheck -Root $fixtureRoot -ArtifactsDirectory ''
+  if ($installerResult.ExitCode -eq 0 -or $installerResult.Output -notmatch 'Installer payload sources') {
+    throw 'The legacy check did not reject an unexpected installer payload source.'
+  }
+  Write-Output 'PASS: rejects unexpected installer payload declarations.'
+
   Remove-Item -LiteralPath (Join-Path $artifactRoot 'DesktopTodoList-x64.exe')
+  $installerLines = @($allowedSources | ForEach-Object { 'Source: "{#' + $_ + '}"; DestDir: "{app}"' })
+  [IO.File]::WriteAllLines($installerScript, $installerLines)
   $cleanResult = Invoke-LegacyCheck -Root $fixtureRoot -ArtifactsDirectory $artifactRoot
   if ($cleanResult.ExitCode -ne 0) { throw "The legacy check rejected a clean fixture: $($cleanResult.Output)" }
   Write-Output 'PASS: accepts a clean source tree and artifact directory.'

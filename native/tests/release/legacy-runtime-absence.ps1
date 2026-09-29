@@ -31,6 +31,16 @@ $webFiles = @(Get-ChildItem -LiteralPath $root -Recurse -File -Include '*.html',
 if ($webFiles.Count -gt 0) {
   throw ("Active tree contains a web document/script file: " + [IO.Path]::GetRelativePath($root, $webFiles[0].FullName))
 }
+$installerSource = Join-Path $root 'installer\DesktopTodoList.iss'
+if (Test-Path -LiteralPath $installerSource -PathType Leaf) {
+  $installerText = [IO.File]::ReadAllText($installerSource)
+  $sourceTokens = @([regex]::Matches($installerText, '(?im)^\s*Source:\s*"([^"]+)"') | ForEach-Object { $_.Groups[1].Value } | Sort-Object)
+  $expectedSourceTokens = @('{#ExePath}', '{#ReadmePath}', '{#PrivacyPath}', '{#LicensePath}',
+    '{#InstallGuidePath}', '{#MigrationGuidePath}', '{#TroubleshootingGuidePath}') | Sort-Object
+  if (Compare-Object -ReferenceObject $expectedSourceTokens -DifferenceObject $sourceTokens) {
+    throw 'Installer payload sources must be limited to the native application, license, and approved user guides.'
+  }
+}
 
 if ($ArtifactsDirectory) {
   $artifactRoot = (Resolve-Path -LiteralPath $ArtifactsDirectory).Path
@@ -65,6 +75,10 @@ if ($ArtifactsDirectory) {
         if ($content -match '(?i)msedge(?:\.exe)?|WebView2?|TcpListener|http://127\.0\.0\.1|localhost\s*(?:server|service)|launcher\.ps1|启动待办\.bat|powershell\.exe') {
           throw ("Legacy runtime/launcher marker in public artifact $($target.Name): $($member.Name)")
         }
+        $isSetupCompiler = $target.Name -match '-Setup\.exe$'
+        if ($isBinary -and -not $isSetupCompiler -and $content -match '(?i)\.(?:html?|js)\b') {
+          throw ("Embedded web resource extension in public artifact $($target.Name): $($member.Name)")
+        }
       }
     }
   } finally {
@@ -72,4 +86,4 @@ if ($ArtifactsDirectory) {
   }
 }
 
-Write-Output 'PASS: active tree and supplied public artifacts contain no retired web runtime, script launcher, or legacy runtime markers.'
+Write-Output 'PASS: active tree, installer payload declarations, and supplied public artifacts contain no retired web runtime or script launcher.'
