@@ -287,7 +287,7 @@
 
   Expected: release gate passes, native JSON migration fixture still passes, and no browser-era runtime file appears in public artifacts.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
   ```powershell
   git add -A src host tests docs README.md 启动待办.bat
