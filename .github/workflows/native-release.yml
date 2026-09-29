@@ -1,0 +1,233 @@
+name: Native Windows Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Package ${{ matrix.arch }}
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            platform: x64
+          - arch: arm64
+            platform: ARM64
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Validate release tag
+        id: version
+        shell: pwsh
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          if ($tag -cnotmatch '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
+            throw "Release tag must be vMAJOR.MINOR.PATCH: $tag"
+          }
+          $version = $tag.Substring(1)
+          "RELEASE_VERSION=$version" >> $env:GITHUB_ENV
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Get-Command ISCC.exe -ErrorAction SilentlyContinue)) {
+            choco install innosetup --yes --no-progress
+          }
+
+      - name: Configure ${{ matrix.arch }}
+        shell: pwsh
+        run: >-
+          cmake -S . -B "out/build/${{ matrix.arch }}" -G "Visual Studio 17 2022"
+          -A "${{ matrix.platform }}"
+          "-DDESKTOP_TODO_VERSION=$env:RELEASE_VERSION"
+
+      - name: Build release binaries
+        shell: pwsh
+        run: cmake --build "out/build/${{ matrix.arch }}" --config Release --parallel
+
+      - name: Run x64 native tests
+        if: matrix.arch == 'x64'
+        shell: pwsh
+        run: ctest --test-dir "out/build/${{ matrix.arch }}" --output-on-failure -C Release
+
+      - name: Verify x64 executable metadata
+        if: matrix.arch == 'x64'
+        shell: pwsh
+        run: >-
+          ./native/tests/release/resource-metadata.ps1
+          -Exe out/build/x64/native/Release/DesktopTodoList.exe
+          -Version $env:RELEASE_VERSION
+
+      - name: Verify ARM64 metadata without executing the foreign binary
+        if: matrix.arch == 'arm64'
+        shell: pwsh
+        run: |
+          $exe = 'out/build/arm64/native/Release/DesktopTodoList.exe'
+          $info = [Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $exe))
+          if ($info.ProductVersion.Trim() -cne $env:RELEASE_VERSION) { throw "ARM64 product version mismatch: $($info.ProductVersion)" }
+          Write-Host '[SKIP] Runtime execution requires an ARM64 Windows host.'
+
+      - name: Sign executable when certificate secrets are configured
+        shell: pwsh
+        env:
+          WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
+          WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          $hasCertificate = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_BASE64)
+          $hasPassword = -not [string]::IsNullOrEmpty($env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD)
+          if ($hasCertificate -xor $hasPassword) { throw 'Both signing secrets must be configured together.' }
+          if ($hasCertificate) {
+            ./scripts/sign-artifact.ps1 -Path "out/build/${{ matrix.arch }}/native/Release/DesktopTodoList.exe"
+          } else {
+            Write-Host 'No signing secrets configured; this release will be explicitly marked unsigned.'
+          }
+
+      - name: Build portable package
+        shell: pwsh
+        run: >-
+          ./scripts/package-portable.ps1
+          -Exe "out/build/${{ matrix.arch }}/native/Release/DesktopTodoList.exe"
+          -Architecture "${{ matrix.arch }}" -Version $env:RELEASE_VERSION
+
+      - name: Build per-user installer
+        shell: pwsh
+        run: >-
+          ./installer/build-installer.ps1
+          -Exe "out/build/${{ matrix.arch }}/native/Release/DesktopTodoList.exe"
+          -Architecture "${{ matrix.arch }}" -Version $env:RELEASE_VERSION
+
+      - name: Sign installer when certificate secrets are configured
+        shell: pwsh
+        env:
+          WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
+          WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          if (-not [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_BASE64)) {
+            ./scripts/sign-artifact.ps1 -Path "out/packages/$env:RELEASE_VERSION/${{ matrix.arch }}/DesktopTodoList-${{ matrix.arch }}-Setup.exe"
+          }
+
+      - name: Check x64 package contents and execution
+        if: matrix.arch == 'x64'
+        shell: pwsh
+        run: >-
+          ./native/tests/release/package-contents.ps1
+          -Package "out/packages/$env:RELEASE_VERSION/x64/DesktopTodoList-x64-portable.zip"
+          -Architecture x64 -Version $env:RELEASE_VERSION
+          -Installer "out/packages/$env:RELEASE_VERSION/x64/DesktopTodoList-x64-Setup.exe"
+
+      - name: Check ARM64 package contents without execution
+        if: matrix.arch == 'arm64'
+        shell: pwsh
+        run: >-
+          ./native/tests/release/package-contents.ps1
+          -Package "out/packages/$env:RELEASE_VERSION/arm64/DesktopTodoList-arm64-portable.zip"
+          -Architecture arm64 -Version $env:RELEASE_VERSION -SkipExecutableRun
+          -Installer "out/packages/$env:RELEASE_VERSION/arm64/DesktopTodoList-arm64-Setup.exe"
+
+      - name: Stage release artifacts
+        shell: pwsh
+        run: |
+          $source = "out/packages/$env:RELEASE_VERSION/${{ matrix.arch }}"
+          $target = "out/release-artifacts/${{ matrix.arch }}"
+          New-Item -ItemType Directory -Path $target -Force | Out-Null
+          Copy-Item "out/build/${{ matrix.arch }}/native/Release/DesktopTodoList.exe" "$target/DesktopTodoList-${{ matrix.arch }}.exe"
+          Copy-Item "$source/DesktopTodoList-${{ matrix.arch }}-Setup.exe" $target
+          Copy-Item "$source/DesktopTodoList-${{ matrix.arch }}-portable.zip" $target
+
+      - name: Upload architecture artifact set
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: desktop-todo-release-${{ matrix.arch }}
+          path: out/release-artifacts/${{ matrix.arch }}/*
+          if-no-files-found: error
+          retention-days: 5
+
+  publish:
+    name: Verify and publish complete release
+    runs-on: windows-2022
+    needs: build
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Validate release tag
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF_NAME -cnotmatch '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
+            throw "Release tag must be vMAJOR.MINOR.PATCH: $env:GITHUB_REF_NAME"
+          }
+          $env:RELEASE_VERSION = $env:GITHUB_REF_NAME.Substring(1)
+          "RELEASE_VERSION=$env:RELEASE_VERSION" >> $env:GITHUB_ENV
+
+      - name: Download all architecture artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: desktop-todo-release-*
+          path: out/release-artifacts
+          merge-multiple: true
+
+      - name: Determine and write signature status
+        id: signature
+        env:
+          WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
+          WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+        shell: pwsh
+        run: |
+          $hasCertificate = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_BASE64)
+          $hasPassword = -not [string]::IsNullOrEmpty($env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD)
+          if ($hasCertificate -xor $hasPassword) { throw 'Both signing secrets must be configured together.' }
+          $status = if ($hasCertificate) { 'valid' } else { 'unsigned' }
+          ./scripts/write-checksums.ps1 -ArtifactsDirectory out/release-artifacts -SignatureStatus $status
+          "status=$status" >> $env:GITHUB_OUTPUT
+
+      - name: Run positive and negative manifest tests
+        shell: pwsh
+        run: |
+          ./native/tests/release/release-manifest-test.ps1 `
+            -X64Executable out/release-artifacts/DesktopTodoList-x64.exe `
+            -Arm64Executable out/release-artifacts/DesktopTodoList-arm64.exe `
+            -X64Installer out/release-artifacts/DesktopTodoList-x64-Setup.exe `
+            -Arm64Installer out/release-artifacts/DesktopTodoList-arm64-Setup.exe `
+            -Version $env:RELEASE_VERSION -Tag $env:GITHUB_REF_NAME
+
+      - name: Require the complete release manifest
+        shell: pwsh
+        run: >-
+          ./scripts/release-manifest.ps1
+          -ArtifactsDirectory out/release-artifacts
+          -Version $env:RELEASE_VERSION -Tag $env:GITHUB_REF_NAME
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SIGNATURE_STATUS: ${{ steps.signature.outputs.status }}
+        shell: pwsh
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          $title = "DesktopTodoList $env:RELEASE_VERSION"
+          $notes = if ($env:SIGNATURE_STATUS -eq 'unsigned') {
+            'This release is unsigned. Windows SmartScreen may show an unknown-publisher warning.'
+          } else {
+            'The application and installer binaries have valid Authenticode signatures.'
+          }
+          $files = @(Get-ChildItem -LiteralPath out/release-artifacts -File | ForEach-Object FullName | Sort-Object)
+          $ghArgs = @('release', 'create', $tag) + $files + @('--title', $title, '--notes', $notes, '--verify-tag')
+          & gh @ghArgs
+          if ($LASTEXITCODE -ne 0) { throw "GitHub Release creation failed with exit code $LASTEXITCODE." }

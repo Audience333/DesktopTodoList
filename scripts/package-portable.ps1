@@ -25,11 +25,6 @@ $metadata = [Diagnostics.FileVersionInfo]::GetVersionInfo($exePath)
 if ($metadata.ProductVersion -ne $Version) {
   throw "Executable version '$($metadata.ProductVersion)' does not match requested '$Version'."
 }
-$cliVersion = & $exePath --version 2>&1 | Out-String
-if ($LASTEXITCODE -ne 0 -or $cliVersion.Trim() -ne "DesktopTodoList $Version") {
-  throw "Executable --version does not match requested version: $cliVersion"
-}
-
 $stream = [IO.File]::OpenRead($exePath)
 try {
   $reader = [IO.BinaryReader]::new($stream)

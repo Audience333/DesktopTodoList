@@ -159,23 +159,23 @@
 - Consumes: Git tag `vMAJOR.MINOR.PATCH`; optional signing secrets; build and packaging scripts from prior tasks.
 - Produces: six architecture-specific public artifacts plus `checksums.txt`, with release publication blocked unless the complete manifest passes.
 
-- [ ] **Step 1: Write a failing release-manifest test**
+- [x] **Step 1: Write a failing release-manifest test**
 
   Assert exact filenames, both architectures, PE machine types, matching embedded/tag versions, nonempty packages, SHA-256 line for every artifact, no extra public file, and signature status recorded as either valid or explicitly unsigned.
 
-- [ ] **Step 2: Add CI in non-publishing mode and observe expected failure**
+- [x] **Step 2: Add CI in non-publishing mode and observe expected failure**
 
   Run the workflow-equivalent scripts locally for x64 and inspect workflow syntax. Expected: manifest fails until both matrix outputs are aggregated.
 
-- [ ] **Step 3: Implement CI and tag-release workflows**
+- [x] **Step 3: Implement CI and tag-release workflows**
 
   `native-ci.yml` builds/tests x64 and cross-builds ARM64 on pushes and pull requests. `native-release.yml` runs only for `v*` tags, validates tag syntax, signs when secrets exist without echoing secret material, packages both architectures, aggregates all artifacts, runs the manifest gate, then creates the GitHub Release.
 
-- [ ] **Step 4: Validate with a non-publishing workflow run or local action equivalent**
+- [x] **Step 4: Validate with a non-publishing workflow run or local action equivalent**
 
   Expected: complete artifact manifest passes; a deliberately removed ARM64 file or mismatched version makes the release job fail before upload.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
   ```powershell
   git add .github/workflows scripts native/tests/release

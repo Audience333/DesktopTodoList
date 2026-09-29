@@ -4,6 +4,7 @@ param(
   [Parameter(Mandatory)][string]$Architecture,
   [Parameter(Mandatory)][string]$Version,
   [string]$Installer,
+  [switch]$SkipExecutableRun,
   [string]$InstallerScript = (Join-Path $PSScriptRoot '..\..\..\installer\DesktopTodoList.iss')
 )
 
@@ -38,11 +39,19 @@ try {
   }
   Write-Host '[PASS] Executable PE architecture matches package'
 
-  $versionOutput = & $exe --version 2>&1 | Out-String
-  if ($LASTEXITCODE -ne 0 -or $versionOutput.Trim() -ne "DesktopTodoList $Version") {
-    throw "Portable executable version mismatch: $versionOutput"
+  $metadata = [Diagnostics.FileVersionInfo]::GetVersionInfo($exe)
+  if ($metadata.ProductVersion.Trim() -cne $Version) {
+    throw "Portable executable version mismatch: $($metadata.ProductVersion)"
   }
-  Write-Host '[PASS] Extracted executable runs without installation and reports the requested version'
+  if ($SkipExecutableRun) {
+    Write-Host '[SKIP] Executable launch skipped for cross-architecture package verification'
+  } else {
+    $versionOutput = & $exe --version 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0 -or $versionOutput.Trim() -ne "DesktopTodoList $Version") {
+      throw "Portable executable runtime version mismatch: $versionOutput"
+    }
+    Write-Host '[PASS] Extracted executable runs without installation and reports the requested version'
+  }
 
   $forbidden = @($files | Where-Object {
     $_.Extension -in @('.html', '.htm', '.js', '.ps1', '.pdb', '.bat', '.cmd')

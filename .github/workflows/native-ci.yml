@@ -1,0 +1,117 @@
+name: Native Windows CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.arch }}
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            platform: x64
+          - arch: arm64
+            platform: ARM64
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Get-Command ISCC.exe -ErrorAction SilentlyContinue)) {
+            choco install innosetup --yes --no-progress
+          }
+
+      - name: Configure ${{ matrix.arch }}
+        shell: pwsh
+        run: >-
+          cmake -S . -B "out/build/${{ matrix.arch }}" -G "Visual Studio 17 2022"
+          -A "${{ matrix.platform }}"
+          -DDESKTOP_TODO_VERSION=2.0.0
+
+      - name: Build release binaries
+        shell: pwsh
+        run: cmake --build "out/build/${{ matrix.arch }}" --config Release --parallel
+
+      - name: Run x64 test suite
+        if: matrix.arch == 'x64'
+        shell: pwsh
+        run: ctest --test-dir "out/build/${{ matrix.arch }}" --output-on-failure -C Release
+
+      - name: Verify x64 executable resources and runtime version
+        if: matrix.arch == 'x64'
+        shell: pwsh
+        run: >-
+          ./native/tests/release/resource-metadata.ps1
+          -Exe out/build/x64/native/Release/DesktopTodoList.exe -Version 2.0.0
+
+      - name: Verify ARM64 metadata without executing the foreign binary
+        if: matrix.arch == 'arm64'
+        shell: pwsh
+        run: |
+          $exe = 'out/build/arm64/native/Release/DesktopTodoList.exe'
+          $info = [Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $exe))
+          if ($info.ProductVersion.Trim() -cne '2.0.0') { throw "ARM64 product version mismatch: $($info.ProductVersion)" }
+          Write-Host '[SKIP] Runtime execution requires an ARM64 Windows host.'
+
+      - name: Build portable package
+        shell: pwsh
+        run: >-
+          ./scripts/package-portable.ps1
+          -Exe "out/build/${{ matrix.arch }}/native/Release/DesktopTodoList.exe"
+          -Architecture "${{ matrix.arch }}" -Version 2.0.0
+
+      - name: Build per-user installer
+        shell: pwsh
+        run: >-
+          ./installer/build-installer.ps1
+          -Exe "out/build/${{ matrix.arch }}/native/Release/DesktopTodoList.exe"
+          -Architecture "${{ matrix.arch }}" -Version 2.0.0
+
+      - name: Check x64 package contents and execution
+        if: matrix.arch == 'x64'
+        shell: pwsh
+        run: >-
+          ./native/tests/release/package-contents.ps1
+          -Package out/packages/2.0.0/x64/DesktopTodoList-x64-portable.zip
+          -Architecture x64 -Version 2.0.0
+          -Installer out/packages/2.0.0/x64/DesktopTodoList-x64-Setup.exe
+
+      - name: Check ARM64 package contents without execution
+        if: matrix.arch == 'arm64'
+        shell: pwsh
+        run: >-
+          ./native/tests/release/package-contents.ps1
+          -Package out/packages/2.0.0/arm64/DesktopTodoList-arm64-portable.zip
+          -Architecture arm64 -Version 2.0.0 -SkipExecutableRun
+          -Installer out/packages/2.0.0/arm64/DesktopTodoList-arm64-Setup.exe
+
+      - name: Stage CI artifacts
+        shell: pwsh
+        run: |
+          $source = "out/packages/2.0.0/${{ matrix.arch }}"
+          $target = "out/ci-release/${{ matrix.arch }}"
+          New-Item -ItemType Directory -Path $target -Force | Out-Null
+          Copy-Item "out/build/${{ matrix.arch }}/native/Release/DesktopTodoList.exe" "$target/DesktopTodoList-${{ matrix.arch }}.exe"
+          Copy-Item "$source/DesktopTodoList-${{ matrix.arch }}-Setup.exe" $target
+          Copy-Item "$source/DesktopTodoList-${{ matrix.arch }}-portable.zip" $target
+
+      - name: Upload CI package set
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: native-ci-${{ matrix.arch }}
+          path: out/ci-release/${{ matrix.arch }}/*
+          if-no-files-found: error
+          retention-days: 5
