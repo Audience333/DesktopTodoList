@@ -34,6 +34,11 @@ function New-Fixture([string]$Directory, [bool]$ExtraFile = $false) {
     foreach ($doc in @('README.md', 'PRIVACY.md', 'LICENSE.txt')) {
       [IO.File]::WriteAllText((Join-Path $stage $doc), "test fixture`n", [Text.UTF8Encoding]::new($false))
     }
+    $stageDocs = Join-Path $stage 'docs'
+    New-Item -ItemType Directory -Path $stageDocs | Out-Null
+    foreach ($doc in @('install.md', 'migrate-from-web-version.md', 'troubleshooting.md')) {
+      Copy-Item -LiteralPath (Join-Path $repo "docs\$doc") -Destination (Join-Path $stageDocs $doc)
+    }
     Compress-Archive -Path (Join-Path $stage '*') -DestinationPath (Join-Path $Directory $portableName)
     Remove-Item -LiteralPath $stage -Recurse -Force
   }

@@ -29,8 +29,12 @@ try {
   foreach ($architecture in @('x64', 'arm64')) {
     $portableRoot = Join-Path $temporary $architecture
     Expand-Archive -LiteralPath (Join-Path $root "DesktopTodoList-$architecture-portable.zip") -DestinationPath $portableRoot
-    if ((Get-ChildItem -LiteralPath $portableRoot -File -Recurse).Count -ne 4 -or
-        -not (Test-Path -LiteralPath (Join-Path $portableRoot 'DesktopTodoList.exe'))) {
+    $portableNames = @(Get-ChildItem -LiteralPath $portableRoot -File -Recurse | ForEach-Object {
+      [IO.Path]::GetRelativePath($portableRoot, $_.FullName).Replace('\', '/')
+    } | Sort-Object)
+    $expectedPortableNames = @('DesktopTodoList.exe', 'LICENSE.txt', 'PRIVACY.md', 'README.md',
+      'docs/install.md', 'docs/migrate-from-web-version.md', 'docs/troubleshooting.md') | Sort-Object
+    if (Compare-Object -ReferenceObject $expectedPortableNames -DifferenceObject $portableNames) {
       throw "Portable $architecture archive has an unexpected layout."
     }
     $signatureFiles += (Join-Path $portableRoot 'DesktopTodoList.exe')

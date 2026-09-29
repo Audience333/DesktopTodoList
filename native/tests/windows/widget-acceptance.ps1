@@ -1,7 +1,8 @@
 ﻿[CmdletBinding()]
 param(
   [string]$BuildDirectory = 'out\build\windows-x64',
-  [ValidateSet('Debug', 'Release', 'RelWithDebInfo')][string]$Configuration = 'Debug'
+  [ValidateSet('Debug', 'Release', 'RelWithDebInfo')][string]$Configuration = 'Debug',
+  [string]$ReportPath
 )
 
 $ErrorActionPreference = 'Stop'
@@ -11,7 +12,8 @@ $build = if ([IO.Path]::IsPathRooted($BuildDirectory)) {
 } else {
   [IO.Path]::GetFullPath((Join-Path $root $BuildDirectory))
 }
-$reportPath = Join-Path $root 'docs\acceptance\native-widget.md'
+if (-not $ReportPath) { $ReportPath = Join-Path $root 'docs\acceptance\native-widget.md' }
+$reportPath = [IO.Path]::GetFullPath($ReportPath)
 $results = [System.Collections.Generic.List[object]]::new()
 
 function Add-Result([string]$Capability, [string]$Status, [string]$Evidence) {

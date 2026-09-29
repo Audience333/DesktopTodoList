@@ -121,9 +121,12 @@ try {
     $portableFiles = @(Get-ChildItem -LiteralPath $unpacked -File -Recurse | ForEach-Object {
       [IO.Path]::GetRelativePath($unpacked, $_.FullName).Replace('\', '/')
     } | Sort-Object)
-    $expectedPortableFiles = @('DesktopTodoList.exe', 'LICENSE.txt', 'PRIVACY.md', 'README.md') | Sort-Object
+    $expectedPortableFiles = @(
+      'DesktopTodoList.exe', 'LICENSE.txt', 'PRIVACY.md', 'README.md',
+      'docs/install.md', 'docs/migrate-from-web-version.md', 'docs/troubleshooting.md'
+    ) | Sort-Object
     if (Compare-Object -ReferenceObject $expectedPortableFiles -DifferenceObject $portableFiles) {
-      throw "$portableName must contain exactly the executable and three required documents."
+      throw "$portableName must contain exactly the executable, three root documents, and three version-independent user guides."
     }
     $portableExe = Join-Path $unpacked 'DesktopTodoList.exe'
     $portableInfo = Assert-VersionAndArchitecture $portableExe $architecture 'Portable executable'

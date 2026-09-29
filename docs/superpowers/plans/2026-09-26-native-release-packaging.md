@@ -231,17 +231,17 @@
 - Consumes: build outputs, all tests, package checks, acceptance evidence, and documentation checks.
 - Produces: one nonzero-on-failure release gate and a requirement-by-requirement evidence matrix.
 
-- [ ] **Step 1: Create the failing final release gate**
+- [x] **Step 1: Create the failing final release gate**
 
   Verify all CTest results, x64 widget acceptance, ARM64 artifact architecture, package contents, portable executable size below 5 MB, installer and ZIP sizes recorded, no runtime network/browser/PowerShell dependency, complete docs, checksums, and each FR/NFR mapped exactly once to PASS, FAIL, or justified SKIP.
 
-- [ ] **Step 2: Run the gate and capture all remaining failures**
+- [x] **Step 2: Run the gate and capture all remaining failures**
 
   Run: `powershell -ExecutionPolicy Bypass -File scripts/verify-native-release.ps1 -Version 2.0.0 -Artifacts <path>`.
 
   Expected: nonzero until all automatable checks pass and evidence rows exist.
 
-- [ ] **Step 3: Resolve verification gaps without weakening checks**
+- [x] **Step 3: Resolve verification gaps without weakening checks**
 
   Mark unavailable real ARM64, Windows 10, DPI, notification, or accessibility checks as “待对应环境验收” with environment and owner; never convert them to PASS using mocks.
 
