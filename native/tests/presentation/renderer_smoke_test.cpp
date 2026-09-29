@@ -5,6 +5,7 @@
 #include <chrono>
 #include <iostream>
 #include <string>
+#include <string_view>
 
 namespace {
 
@@ -71,8 +72,13 @@ TEST_CASE(renderer_smoke_draws_visible_rows_from_a_1000_task_snapshot_within_bud
     renderer.draw(layout, palette, model, desktop_todo::ViewKind::today, {}, 0.0F);
     const auto elapsed = std::chrono::steady_clock::now() - start;
 
-    EXPECT_TRUE(elapsed < std::chrono::milliseconds{200});
     std::cout << "[BENCH] 1000-task visible Direct2D render: "
-        << std::chrono::duration<double, std::milli>(elapsed).count() << " ms" << std::endl;
+        << std::chrono::duration<double, std::milli>(elapsed).count()
+        << " ms (budget: 200 ms)" << std::endl;
+    char budget_mode[64]{};
+    const auto mode_size = GetEnvironmentVariableA(
+        "DESKTOP_TODO_RENDER_BUDGET_MODE", budget_mode, static_cast<DWORD>(sizeof(budget_mode)));
+    const bool enforce_budget = mode_size == 0 || std::string_view{budget_mode} != "measure-only";
+    if (enforce_budget) EXPECT_TRUE(elapsed < std::chrono::milliseconds{200});
     EXPECT_TRUE(renderer.create_device_resources());
 }

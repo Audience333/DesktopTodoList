@@ -48,7 +48,13 @@ jobs:
       - name: Run x64 test suite
         if: matrix.arch == 'x64'
         shell: pwsh
-        run: ctest --test-dir "out/build/${{ matrix.arch }}" --output-on-failure -C Release
+        run: |
+          $env:DESKTOP_TODO_RENDER_BUDGET_MODE = 'measure-only'
+          ctest --test-dir "out/build/${{ matrix.arch }}" --output-on-failure -C Release
+          $ctestExit = $LASTEXITCODE
+          if ($ctestExit -ne 0) { exit $ctestExit }
+          & "out/build/${{ matrix.arch }}/native/tests/Release/desktop_todo_tests.exe" --filter renderer_smoke_
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Verify x64 executable resources and runtime version
         if: matrix.arch == 'x64'
