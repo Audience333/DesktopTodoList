@@ -10,6 +10,7 @@
 
 #include <chrono>
 #include <filesystem>
+#include <string>
 #include <string_view>
 
 namespace {
@@ -64,13 +65,31 @@ int verify_core(const std::filesystem::path& fixture) {
     return reloaded_json == service_json ? 0 : 16;
 }
 
+int write_version() {
+#ifndef DESKTOP_TODO_VERSION_STRING
+#define DESKTOP_TODO_VERSION_STRING "0.0.0"
+#endif
+    const std::string output = "DesktopTodoList " DESKTOP_TODO_VERSION_STRING "\r\n";
+    const auto standard_output = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (standard_output == nullptr || standard_output == INVALID_HANDLE_VALUE) return 1;
+    DWORD written = 0;
+    if (!WriteFile(standard_output, output.data(), static_cast<DWORD>(output.size()),
+        &written, nullptr) || written != output.size()) return 1;
+    return 0;
+}
+
 }  // namespace
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show_command) {
     int count = 0;
     auto* arguments = CommandLineToArgvW(GetCommandLineW(), &count);
     if (arguments == nullptr) return 2;
+    const bool version = count == 2 && std::wstring_view{arguments[1]} == L"--version";
     const bool verify = count == 3 && std::wstring_view{arguments[1]} == L"--verify-core";
+    if (version) {
+        LocalFree(arguments);
+        return write_version();
+    }
     const auto result = verify ? verify_core(arguments[2]) : -1;
     LocalFree(arguments);
     if (verify) return result;

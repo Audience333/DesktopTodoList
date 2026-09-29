@@ -47,21 +47,21 @@
 - Consumes: release version passed as `DESKTOP_TODO_VERSION`, defaulting to a documented development version.
 - Produces: one authoritative semantic version exposed in file/product resources, manifest metadata, `DesktopTodoList --version`, and installer configuration.
 
-- [ ] **Step 1: Write a failing resource metadata test**
+- [x] **Step 1: Write a failing resource metadata test**
 
   Assert executable architecture, requested execution level `asInvoker`, PerMonitorV2 DPI declaration, supported Windows GUIDs, product name, company placeholder, semantic version, original filename, and matching `--version` output.
 
-- [ ] **Step 2: Run the metadata test and confirm failure**
+- [x] **Step 2: Run the metadata test and confirm failure**
 
   Run: `powershell -ExecutionPolicy Bypass -File native/tests/release/resource-metadata.ps1 -Exe <x64-release-exe> -Version 2.0.0`.
 
   Expected: FAIL because resources and version CLI are incomplete.
 
-- [ ] **Step 3: Implement generated resources and version plumbing**
+- [x] **Step 3: Implement generated resources and version plumbing**
 
   Keep version data generated from one CMake value. Use the existing approved product icon if one exists; otherwise create a minimal repository-owned ICO with required 16/20/24/32/48/256 sizes before release review.
 
-- [ ] **Step 4: Rebuild and rerun metadata verification**
+- [x] **Step 4: Rebuild and rerun metadata verification**
 
   Expected: all resource fields and `--version` match exactly.
 

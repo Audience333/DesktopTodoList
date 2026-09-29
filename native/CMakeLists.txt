@@ -39,6 +39,19 @@ add_library(desktop_todo_core STATIC
 target_include_directories(desktop_todo_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(desktop_todo_core PUBLIC desktop_todo_options Advapi32 Comctl32 Shell32 Comdlg32 WindowsApp Uiautomationcore)
 
+set(DESKTOP_TODO_GENERATED_RESOURCES "${CMAKE_CURRENT_BINARY_DIR}/generated")
+file(MAKE_DIRECTORY "${DESKTOP_TODO_GENERATED_RESOURCES}")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/resources/app.manifest"
+  "${DESKTOP_TODO_GENERATED_RESOURCES}/app.manifest" @ONLY)
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/resources/app.ico"
+  "${DESKTOP_TODO_GENERATED_RESOURCES}/app.ico" COPYONLY)
+file(TO_CMAKE_PATH "${DESKTOP_TODO_GENERATED_RESOURCES}/app.ico"
+  DESKTOP_TODO_ICON_RESOURCE_PATH)
+file(TO_CMAKE_PATH "${DESKTOP_TODO_GENERATED_RESOURCES}/app.manifest"
+  DESKTOP_TODO_MANIFEST_RESOURCE_PATH)
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/resources/version.rc.in"
+  "${DESKTOP_TODO_GENERATED_RESOURCES}/version.rc" @ONLY)
+
 add_executable(DesktopTodoList WIN32
   app/application.cpp
   app/main.cpp
@@ -46,8 +59,15 @@ add_executable(DesktopTodoList WIN32
   presentation/renderer.cpp
   presentation/text_editor.cpp
   presentation/widget_window.cpp
+  "${DESKTOP_TODO_GENERATED_RESOURCES}/version.rc"
 )
 target_link_libraries(DesktopTodoList PRIVATE desktop_todo_core)
 target_link_libraries(DesktopTodoList PRIVATE Comctl32 D2d1 Dwrite Ole32 Shell32)
+target_include_directories(DesktopTodoList PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/resources")
+target_link_options(DesktopTodoList PRIVATE
+  "$<$<CONFIG:Debug>:/INCREMENTAL:NO>"
+  "/MANIFESTINPUT:${DESKTOP_TODO_GENERATED_RESOURCES}/app.manifest")
+target_compile_definitions(DesktopTodoList PRIVATE
+  "DESKTOP_TODO_VERSION_STRING=\"${DESKTOP_TODO_VERSION}\"")
 
 add_subdirectory(tests)
