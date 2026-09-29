@@ -37,7 +37,7 @@ bool show_native_toast(const NotificationPayload& payload) {
         catch (...) { }
     });
     try {
-        static_cast<void>(SetCurrentProcessExplicitAppUserModelID(L"OpenAI.DesktopTodoList"));
+        static_cast<void>(SetCurrentProcessExplicitAppUserModelID(L"DesktopTodoList.Native"));
         using namespace winrt::Windows::Data::Xml::Dom;
         using namespace winrt::Windows::UI::Notifications;
         XmlDocument document;

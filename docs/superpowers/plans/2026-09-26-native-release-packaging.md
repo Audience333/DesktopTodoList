@@ -65,7 +65,7 @@
 
   Expected: all resource fields and `--version` match exactly.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
   ```powershell
   git add CMakeLists.txt cmake native/resources native/tests/release native/CMakeLists.txt
@@ -86,25 +86,25 @@
 - Consumes: signed or unsigned Release executable, architecture, version, license/readme files.
 - Produces: `DesktopTodoList-{arch}-Setup.exe` and `DesktopTodoList-{arch}-portable.zip` with stable filenames and no unrelated files.
 
-- [ ] **Step 1: Write failing package-content checks**
+- [x] **Step 1: Write failing package-content checks**
 
   Assert architecture-correct executable, README, privacy notice, license, no HTML/JS/PowerShell runtime files, no PDB in public package, no remote URL configuration, no elevation request, and portable unarchive/run behavior.
 
-- [ ] **Step 2: Run packaging checks and confirm failure**
+- [x] **Step 2: Run packaging checks and confirm failure**
 
   Run: the portable packaging script followed by `package-contents.ps1`.
 
   Expected: FAIL because scripts and packages do not exist.
 
-- [ ] **Step 3: Implement per-user Inno Setup and portable packaging**
+- [x] **Step 3: Implement per-user Inno Setup and portable packaging**
 
   Set `PrivilegesRequired=lowest` and install under `{localappdata}\Programs\DesktopTodoList`. The x64 package uses `ArchitecturesAllowed=x64compatible and not arm64`; the ARM64 package uses `ArchitecturesAllowed=arm64`. Create Start Menu and uninstall entries, register the AppUserModelID/shortcut required for Toast, and leave autostart disabled until the user enables it.
 
-- [ ] **Step 4: Build and inspect x64 packages locally**
+- [x] **Step 4: Build and inspect x64 packages locally**
 
   Expected: installer runs without UAC, portable package launches without installation, and content checks pass. ARM64 packaging may be created by cross-build now and executed later on matching hardware.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
   ```powershell
   git add installer scripts native/tests/release .gitignore
