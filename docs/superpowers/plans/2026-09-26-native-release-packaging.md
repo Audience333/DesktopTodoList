@@ -249,7 +249,7 @@
 
   Expected: zero exit code; all automatable rows PASS; remaining manual rows are explicit and release-visible.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
   ```powershell
   git add scripts tests/run-all.ps1 docs/acceptance
