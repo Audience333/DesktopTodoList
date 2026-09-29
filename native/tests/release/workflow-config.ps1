@@ -11,6 +11,7 @@ function Assert-Pattern([string]$Text, [string]$Pattern, [string]$Description) {
 
 Assert-Pattern $ci '(?m)^  pull_request:' 'PRs run native CI'
 Assert-Pattern $ci '(?m)^            platform: ARM64$' 'CI cross-builds ARM64'
+Assert-Pattern $ci '"-DDESKTOP_TODO_VERSION=2\.0\.0"' 'CI passes the full semantic version as one PowerShell argument'
 Assert-Pattern $ci 'ctest --test-dir' 'CI runs the native test suite'
 Assert-Pattern $ci 'SkipExecutableRun' 'CI skips execution only for ARM64 package checks'
 Assert-Pattern $ci 'contents: read' 'CI token is read-only'
