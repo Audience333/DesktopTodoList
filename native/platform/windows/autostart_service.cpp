@@ -1,6 +1,7 @@
 #include "platform/windows/autostart_service.h"
 
 #include <string>
+#include <vector>
 
 namespace desktop_todo {
 namespace {
@@ -32,6 +33,23 @@ DWORD remove_hkcu_run(std::wstring_view name) {
     return removed == ERROR_FILE_NOT_FOUND ? ERROR_SUCCESS : removed;
 }
 
+std::wstring registry_value_name() {
+#ifdef DESKTOP_TODO_TEST_PROFILE
+    constexpr wchar_t prefix[] = L"DesktopTodoListTest_";
+    const auto length = GetEnvironmentVariableW(L"DESKTOP_TODO_TEST_AUTOSTART_NAME", nullptr, 0);
+    if (length < std::size(prefix) || length > 256) return {};
+    std::vector<wchar_t> value(length);
+    const auto copied = GetEnvironmentVariableW(
+        L"DESKTOP_TODO_TEST_AUTOSTART_NAME", value.data(), length);
+    if (copied == 0 || copied >= length) return {};
+    std::wstring name{value.data(), copied};
+    if (name.compare(0, std::size(prefix) - 1, prefix) != 0) return {};
+    return name;
+#else
+    return std::wstring{AutostartService::value_name()};
+#endif
+}
+
 }  // namespace
 
 AutostartService::AutostartService(AutostartApi api) : api_(std::move(api)) {
@@ -41,13 +59,15 @@ AutostartService::AutostartService(AutostartApi api) : api_(std::move(api)) {
 
 AutostartResult AutostartService::set_enabled(
     bool enabled, const std::filesystem::path& executable) const {
+    const auto name = registry_value_name();
+    if (name.empty()) return {false, ERROR_INVALID_PARAMETER};
     DWORD status = ERROR_SUCCESS;
     if (enabled) {
         if (executable.empty()) return {false, ERROR_INVALID_PARAMETER};
         const auto command = L"\"" + executable.wstring() + L"\"";
-        status = api_.write_value(value_name(), command);
+        status = api_.write_value(name, command);
     } else {
-        status = api_.remove_value(value_name());
+        status = api_.remove_value(name);
     }
     return {status == ERROR_SUCCESS, status};
 }

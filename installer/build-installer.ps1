@@ -7,7 +7,9 @@ param(
   [string]$OutputDirectory = (Join-Path $PSScriptRoot "..\out\packages\$Version\$Architecture"),
   [string]$Readme = (Join-Path $PSScriptRoot '..\README.md'),
   [string]$Privacy = (Join-Path $PSScriptRoot '..\docs\privacy.md'),
-  [string]$License = (Join-Path $PSScriptRoot '..\LICENSE.txt')
+  [string]$License = (Join-Path $PSScriptRoot '..\LICENSE.txt'),
+  [string]$TestDataDirectory = '',
+  [string]$TestAutostartName = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -58,6 +60,27 @@ New-Item -ItemType Directory -Path $outputPath -Force | Out-Null
 $scriptPath = Join-Path $PSScriptRoot 'DesktopTodoList.iss'
 $iconPath = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\native\resources\app.ico')).Path
 $messagesPath = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot 'messages.zh-CN.isl')).Path
+if ($TestDataDirectory) {
+  $testDataPath = [IO.Path]::GetFullPath($TestDataDirectory)
+  $safeParent = [IO.Path]::GetFullPath((Join-Path ([IO.Path]::GetTempPath()) 'DesktopTodoListTestProfiles'))
+  $expectedRoot = [IO.Path]::GetFullPath((Join-Path (Split-Path -Parent (Split-Path -Parent $testDataPath)) ''))
+  $relativeRoot = [IO.Path]::GetRelativePath($safeParent, $expectedRoot)
+  $profileId = Split-Path -Leaf $expectedRoot
+  $parsedProfileId = [guid]::Empty
+  if ($relativeRoot.StartsWith('..') -or [IO.Path]::IsPathRooted($relativeRoot) -or
+      -not [guid]::TryParse($profileId, [ref]$parsedProfileId) -or
+      (Split-Path -Leaf $testDataPath) -ne 'DesktopTodoList' -or
+      (Split-Path -Leaf (Split-Path -Parent $testDataPath)) -ne 'LocalAppData') {
+    throw "Test data path must be <temp>\DesktopTodoListTestProfiles\<guid>\LocalAppData\DesktopTodoList: $testDataPath"
+  }
+  $expectedRegistryName = "DesktopTodoListTest_$($parsedProfileId.ToString('N'))"
+  if ($TestAutostartName -ne $expectedRegistryName) {
+    throw "TestAutostartName must match this profile exactly: $expectedRegistryName"
+  }
+} else {
+  if ($TestAutostartName) { throw 'TestAutostartName requires a valid TestDataDirectory.' }
+  $testDataPath = ''
+}
 
 $values = @{
   '@AppVersion@' = $Version
@@ -69,6 +92,8 @@ $values = @{
   '@OutputDirectory@' = $outputPath
   '@IconFilePath@' = $iconPath
   '@MessagesFilePath@' = $messagesPath
+  '@TestDataDirectory@' = $testDataPath
+  '@TestAutostartName@' = $TestAutostartName
 }
 $rendered = [IO.File]::ReadAllText($scriptPath)
 foreach ($token in $values.Keys) {

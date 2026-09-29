@@ -123,23 +123,23 @@
 - Consumes: installer from Task 2 and an isolated test-local application data root supplied by test-only command-line/environment override.
 - Produces: repeatable lifecycle evidence for clean install, in-place upgrade, default uninstall, and uninstall-with-data-removal.
 
-- [ ] **Step 1: Write the failing lifecycle harness**
+- [x] **Step 1: Write the failing lifecycle harness**
 
   Assert no elevation, shortcut/AppUserModelID creation, application launch, seeded data persistence across upgrade, autostart command updating to the installed path, default uninstall preserving data, explicit cleanup removing only the exact DesktopTodoList data directory, and no deletion outside the isolated profile.
 
-- [ ] **Step 2: Run against the installer and record failing lifecycle points**
+- [x] **Step 2: Run against the installer and record failing lifecycle points**
 
   Expected: nonzero until every automatable lifecycle condition passes; ARM64 execution is SKIP on non-ARM64 hardware with reason.
 
-- [ ] **Step 3: Adjust installer lifecycle behavior only**
+- [x] **Step 3: Adjust installer lifecycle behavior only**
 
   Do not add an application self-updater. Ensure cleanup paths are literal, resolved under the expected isolated or `%LOCALAPPDATA%\DesktopTodoList` root, and opt-in.
 
-- [ ] **Step 4: Run clean, upgrade, preserve, and remove-data cases**
+- [x] **Step 4: Run clean, upgrade, preserve, and remove-data cases**
 
   Expected: all x64 cases pass and evidence is recorded; no unrelated profile file changes.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
   ```powershell
   git add installer native/tests/release docs/acceptance/install-lifecycle.md

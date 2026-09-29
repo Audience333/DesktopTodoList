@@ -69,5 +69,10 @@ target_link_options(DesktopTodoList PRIVATE
   "/MANIFESTINPUT:${DESKTOP_TODO_GENERATED_RESOURCES}/app.manifest")
 target_compile_definitions(DesktopTodoList PRIVATE
   "DESKTOP_TODO_VERSION_STRING=\"${DESKTOP_TODO_VERSION}\"")
+option(DESKTOP_TODO_TEST_PROFILE "Build the application with isolated lifecycle-test hooks" OFF)
+if(DESKTOP_TODO_TEST_PROFILE)
+  target_compile_definitions(desktop_todo_core PRIVATE DESKTOP_TODO_TEST_PROFILE=1)
+  target_compile_definitions(DesktopTodoList PRIVATE DESKTOP_TODO_TEST_PROFILE=1)
+endif()
 
 add_subdirectory(tests)

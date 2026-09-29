@@ -29,14 +29,26 @@ StateRepository::StateRepository(
     : files_(files), directory_(std::move(directory)), timestamp_(std::move(timestamp)) {}
 
 LoadResult StateRepository::load() {
-    const auto source = directory_ / L"state.json";
+    const auto source = directory_ / L"data.json";
+    const auto legacy_source = directory_ / L"state.json";
     const auto source_exists = files_.exists(source);
+    const auto legacy_exists = !source_exists && files_.exists(legacy_source);
+    const auto selected_source = legacy_exists ? legacy_source : source;
+    const auto selected_exists = source_exists || legacy_exists;
     std::vector<ValidationIssue> source_issues;
     std::filesystem::path preserved_source;
-    if (source_exists) {
-        const auto bytes = files_.read(source);
+    if (selected_exists) {
+        const auto bytes = files_.read(selected_source);
         if (bytes.ok()) {
             auto decoded = decode_state_utf8(bytes.bytes);
+            if (decoded.state.has_value() && legacy_exists) {
+                const auto migrated = save(*decoded.state);
+                if (!migrated.ok) {
+                    return {std::move(*decoded.state), LoadStatus::ok, migrated.error,
+                        std::move(decoded.issues), {}, false};
+                }
+                return {std::move(*decoded.state), LoadStatus::ok, {}, std::move(decoded.issues), {}};
+            }
             if (decoded.state.has_value()) {
                 const auto status = decoded.issues.empty() ? LoadStatus::ok : LoadStatus::repaired;
                 return {std::move(*decoded.state), status, {}, std::move(decoded.issues), {}};
@@ -44,7 +56,15 @@ LoadResult StateRepository::load() {
             source_issues = std::move(decoded.issues);
         }
 
-        const auto preserved = preserve_corrupt_source();
+        ExportResult preserved;
+        if (selected_source == source) {
+            preserved = preserve_corrupt_source();
+        } else {
+            const auto destination = directory_ /
+                (L"state.corrupt-" + timestamp_() + L".json");
+            const auto moved = files_.move(selected_source, destination);
+            preserved = {moved.ok, moved.ok ? destination : std::filesystem::path{}, moved.error};
+        }
         if (!preserved.ok) {
             return {{}, LoadStatus::reset, preserved.error, std::move(source_issues), {}, false};
         }
@@ -65,7 +85,7 @@ LoadResult StateRepository::load() {
                 std::move(decoded.issues), std::move(preserved_source)};
         }
     }
-    if (!source_exists && backups.empty()) return {};
+    if (!selected_exists && backups.empty()) return {};
     return {{}, LoadStatus::reset, L"No valid state or backup",
         std::move(source_issues), std::move(preserved_source)};
 }
@@ -85,7 +105,7 @@ SaveResult StateRepository::save_to(
 }
 
 SaveResult StateRepository::save(const AppState& state) {
-    return save_to(directory_ / L"state.json", state);
+    return save_to(directory_ / L"data.json", state);
 }
 
 BackupResult StateRepository::ensure_daily_backup(const AppState& state, LocalDate today) {
@@ -119,7 +139,7 @@ BackupResult StateRepository::create_import_backup(const AppState& state) {
 }
 
 ExportResult StateRepository::preserve_corrupt_source() {
-    const auto source = directory_ / L"state.json";
+    const auto source = directory_ / L"data.json";
     if (!files_.exists(source)) return {};
     const auto destination = directory_ / (L"state.corrupt-" + timestamp_() + L".json");
     const auto moved = files_.move(source, destination);

@@ -21,9 +21,11 @@
 #include <algorithm>
 #include <array>
 #include <cstdio>
+#include <cwctype>
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace desktop_todo {
 namespace {
@@ -65,6 +67,33 @@ std::wstring new_id() {
 }
 
 std::filesystem::path data_directory() {
+#ifdef DESKTOP_TODO_TEST_PROFILE
+    const auto length = GetEnvironmentVariableW(L"DESKTOP_TODO_TEST_DATA_ROOT", nullptr, 0);
+    if (length < 2 || length >= 32768) return {};
+    std::vector<wchar_t> value(length);
+    const auto copied = GetEnvironmentVariableW(L"DESKTOP_TODO_TEST_DATA_ROOT", value.data(), length);
+    if (copied == 0 || copied >= length) return {};
+    std::error_code error;
+    const auto requested = std::filesystem::path{std::wstring{value.data(), copied}};
+    if (!requested.is_absolute()) return {};
+    const auto resolved = std::filesystem::weakly_canonical(requested, error);
+    if (error || resolved.filename() != L"DesktopTodoList" ||
+        resolved.parent_path().filename() != L"LocalAppData") return {};
+    const auto profile_root = resolved.parent_path().parent_path();
+    const auto test_root = std::filesystem::weakly_canonical(
+        std::filesystem::temp_directory_path(error) / L"DesktopTodoListTestProfiles", error);
+    if (error) return {};
+    const auto profile_name = profile_root.filename().native();
+    if (profile_name.size() != 32 ||
+        !std::all_of(profile_name.begin(), profile_name.end(), [](wchar_t character) {
+            return std::iswxdigit(character) != 0;
+        })) return {};
+    auto resolved_test_root = test_root.native();
+    auto resolved_profile_parent = profile_root.parent_path().native();
+    if (CompareStringOrdinal(resolved_test_root.c_str(), static_cast<int>(resolved_test_root.size()),
+        resolved_profile_parent.c_str(), static_cast<int>(resolved_profile_parent.size()), TRUE) != CSTR_EQUAL) return {};
+    return resolved;
+#else
     PWSTR value = nullptr;
     if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, KF_FLAG_DEFAULT, nullptr, &value))) {
         std::filesystem::path result{value};
@@ -72,6 +101,20 @@ std::filesystem::path data_directory() {
         return result / L"DesktopTodoList";
     }
     return {};
+#endif
+}
+
+bool has_test_profile_sync_argument() {
+#ifdef DESKTOP_TODO_TEST_PROFILE
+    int count = 0;
+    auto* arguments = CommandLineToArgvW(GetCommandLineW(), &count);
+    if (arguments == nullptr) return false;
+    const bool requested = count == 2 && std::wstring_view{arguments[1]} == L"--test-profile-sync";
+    LocalFree(arguments);
+    return requested;
+#else
+    return false;
+#endif
 }
 
 LaunchRequest command_line_request() {
@@ -136,6 +179,14 @@ public:
         if (!service_.start()) {
             cleanup_windows();
             return 7;
+        }
+        const auto current_settings = service_.snapshot().settings;
+        if (has_test_profile_sync_argument()) {
+            if (!current_settings.auto_start) return 23;
+            return autostart_service_.set_enabled(true, executable_path_).success ? 0 : 24;
+        }
+        if (current_settings.auto_start && !executable_path_.empty()) {
+            static_cast<void>(autostart_service_.set_enabled(true, executable_path_));
         }
         widget_ = std::make_unique<WidgetWindow>(service_);
         const auto initial_show_command = service_.snapshot().settings.start_minimized
