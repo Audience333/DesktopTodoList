@@ -17,9 +17,16 @@ try {
   Expand-Archive -LiteralPath $packagePath -DestinationPath $work
   $files = @(Get-ChildItem -LiteralPath $work -File -Recurse)
   $names = @($files | ForEach-Object { $_.Name })
+  $relativeNames = @($files | ForEach-Object {
+    [IO.Path]::GetRelativePath($work, $_.FullName).Replace('\', '/')
+  })
   foreach ($required in @('DesktopTodoList.exe', 'README.md', 'PRIVACY.md', 'LICENSE.txt')) {
     if ($names -notcontains $required) { throw "Package is missing required file: $required" }
     Write-Host "[PASS] Required file: $required"
+  }
+  foreach ($required in @('docs/install.md', 'docs/migrate-from-web-version.md', 'docs/troubleshooting.md')) {
+    if ($relativeNames -notcontains $required) { throw "Package is missing user guide: $required" }
+    Write-Host "[PASS] Packaged user guide: $required"
   }
 
   $exe = Join-Path $work 'DesktopTodoList.exe'
@@ -91,6 +98,12 @@ try {
   )) {
     if ($installerScriptContent -notmatch $pattern) { throw "Installer script is missing required per-user/architecture configuration: $pattern" }
   }
+  foreach ($guide in @('install.md', 'migrate-from-web-version.md', 'troubleshooting.md')) {
+    $guidePattern = [regex]::Escape("DestDir: `"{app}\docs`"; DestName: `"$guide`"")
+    if ($installerScriptContent -notmatch $guidePattern) {
+      throw "Installer is missing the packaged user guide: $guide"
+    }
+  }
   foreach ($pattern in @('UninstallProgram=卸载 %1', 'LaunchProgram=启动 %1')) {
     if ($languageMessages -notmatch $pattern) { throw "Installer language file is missing required localized text: $pattern" }
   }
@@ -115,7 +128,7 @@ try {
     }
     Write-Host '[PASS] Installer artifact has matching filename and version metadata'
   }
-  Write-Host 'Package content checks: 9 passed.'
+  Write-Host 'Package content checks: all checks passed.'
 } finally {
   Remove-Item -LiteralPath $work -Recurse -Force
 }

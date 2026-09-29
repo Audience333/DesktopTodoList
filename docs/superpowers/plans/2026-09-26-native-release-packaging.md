@@ -196,23 +196,23 @@
 - Consumes: final paths, filenames, shortcuts, data locations, and fallback behaviors from all prior tasks.
 - Produces: user-facing install/use/uninstall/migration/privacy guidance matching actual artifacts.
 
-- [ ] **Step 1: Write a failing documentation check**
+- [x] **Step 1: Write a failing documentation check**
 
   Require download choices, x64/ARM64 guidance, portable use, SmartScreen warning for unsigned builds, data and backup paths, export/import migration, tray recovery, `Ctrl+Alt+T`, `Ctrl+Alt+L`, uninstall data behavior, offline/no-telemetry statement, and troubleshooting for notification/hotkey/autostart failures.
 
-- [ ] **Step 2: Run the check and confirm failure**
+- [x] **Step 2: Run the check and confirm failure**
 
   Run: `powershell -ExecutionPolicy Bypass -File native/tests/release/documentation-check.ps1`.
 
-- [ ] **Step 3: Write concise end-user documentation**
+- [x] **Step 3: Write concise end-user documentation**
 
   State clearly that automatic extraction of the old Edge `localStorage` is not performed: users export JSON from the old version and import it in the native version.
 
-- [ ] **Step 4: Run documentation and package-content checks**
+- [x] **Step 4: Run documentation and package-content checks**
 
   Expected: all required topics are present and packaged documentation uses the same version-independent filenames.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
   ```powershell
   git add README.md docs native/tests/release

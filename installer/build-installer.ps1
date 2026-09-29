@@ -60,6 +60,10 @@ New-Item -ItemType Directory -Path $outputPath -Force | Out-Null
 $scriptPath = Join-Path $PSScriptRoot 'DesktopTodoList.iss'
 $iconPath = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\native\resources\app.ico')).Path
 $messagesPath = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot 'messages.zh-CN.isl')).Path
+$docsPath = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\docs')).Path
+$installGuidePath = (Resolve-Path -LiteralPath (Join-Path $docsPath 'install.md')).Path
+$migrationGuidePath = (Resolve-Path -LiteralPath (Join-Path $docsPath 'migrate-from-web-version.md')).Path
+$troubleshootingGuidePath = (Resolve-Path -LiteralPath (Join-Path $docsPath 'troubleshooting.md')).Path
 if ($TestDataDirectory) {
   $testDataPath = [IO.Path]::GetFullPath($TestDataDirectory)
   $safeParent = [IO.Path]::GetFullPath((Join-Path ([IO.Path]::GetTempPath()) 'DesktopTodoListTestProfiles'))
@@ -92,6 +96,9 @@ $values = @{
   '@OutputDirectory@' = $outputPath
   '@IconFilePath@' = $iconPath
   '@MessagesFilePath@' = $messagesPath
+  '@InstallGuidePath@' = $installGuidePath
+  '@MigrationGuidePath@' = $migrationGuidePath
+  '@TroubleshootingGuidePath@' = $troubleshootingGuidePath
   '@TestDataDirectory@' = $testDataPath
   '@TestAutostartName@' = $TestAutostartName
 }

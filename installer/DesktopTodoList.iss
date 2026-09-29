@@ -7,6 +7,9 @@
 #define OutputDirectory "@OutputDirectory@"
 #define IconFilePath "@IconFilePath@"
 #define MessagesFilePath "@MessagesFilePath@"
+#define InstallGuidePath "@InstallGuidePath@"
+#define MigrationGuidePath "@MigrationGuidePath@"
+#define TroubleshootingGuidePath "@TroubleshootingGuidePath@"
 #define TestDataDirectory "@TestDataDirectory@"
 #define TestAutostartName "@TestAutostartName@"
 
@@ -68,6 +71,9 @@ Source: "{#ExePath}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#ReadmePath}"; DestDir: "{app}"; DestName: "README.md"; Flags: ignoreversion
 Source: "{#PrivacyPath}"; DestDir: "{app}"; DestName: "PRIVACY.md"; Flags: ignoreversion
 Source: "{#LicensePath}"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
+Source: "{#InstallGuidePath}"; DestDir: "{app}\docs"; DestName: "install.md"; Flags: ignoreversion
+Source: "{#MigrationGuidePath}"; DestDir: "{app}\docs"; DestName: "migrate-from-web-version.md"; Flags: ignoreversion
+Source: "{#TroubleshootingGuidePath}"; DestDir: "{app}\docs"; DestName: "troubleshooting.md"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\DesktopTodoList"; Filename: "{app}\DesktopTodoList.exe"; WorkingDir: "{app}"; AppUserModelID: "DesktopTodoList.Native"

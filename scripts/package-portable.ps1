@@ -17,7 +17,12 @@ $exePath = (Resolve-Path -LiteralPath $Exe).Path
 $readmePath = (Resolve-Path -LiteralPath $Readme).Path
 $privacyPath = (Resolve-Path -LiteralPath $Privacy).Path
 $licensePath = (Resolve-Path -LiteralPath $License).Path
-foreach ($file in @($exePath, $readmePath, $privacyPath, $licensePath)) {
+$docsPath = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\docs')).Path
+$guidePaths = @{}
+foreach ($guide in @('install.md', 'migrate-from-web-version.md', 'troubleshooting.md')) {
+  $guidePaths[$guide] = (Resolve-Path -LiteralPath (Join-Path $docsPath $guide)).Path
+}
+foreach ($file in @($exePath, $readmePath, $privacyPath, $licensePath) + @($guidePaths.Values)) {
   if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Required package input missing: $file" }
 }
 
@@ -39,7 +44,7 @@ if ($signature -ne 0x00004550 -or $machine -ne $expectedMachine) {
   throw ("Executable architecture '{0}' does not match requested '{1}'." -f ('0x{0:X4}' -f $machine), $Architecture)
 }
 
-foreach ($source in @($readmePath, $privacyPath, $licensePath)) {
+foreach ($source in @($readmePath, $privacyPath, $licensePath) + @($guidePaths.Values)) {
   $text = [IO.File]::ReadAllText($source)
   if ($text -match '(?i)https?://') { throw "Offline package documentation must not contain a remote URL: $source" }
 }
@@ -54,6 +59,11 @@ try {
   Copy-Item -LiteralPath $readmePath -Destination (Join-Path $stage 'README.md')
   Copy-Item -LiteralPath $privacyPath -Destination (Join-Path $stage 'PRIVACY.md')
   Copy-Item -LiteralPath $licensePath -Destination (Join-Path $stage 'LICENSE.txt')
+  $stageDocs = Join-Path $stage 'docs'
+  New-Item -ItemType Directory -Path $stageDocs | Out-Null
+  foreach ($guide in $guidePaths.Keys) {
+    Copy-Item -LiteralPath $guidePaths[$guide] -Destination (Join-Path $stageDocs $guide)
+  }
   if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
   Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zipPath -CompressionLevel Optimal
 } finally {
