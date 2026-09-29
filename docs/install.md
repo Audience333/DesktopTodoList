@@ -15,9 +15,9 @@
 
 1. 双击对应的 `Setup.exe`。
 2. 安装程序只为当前 Windows 用户安装到 `%LOCALAPPDATA%\Programs\DesktopTodoList`，不需要管理员权限。
-3. 完成后可从开始菜单的 DesktopTodoList 快捷方式启动。登录 Windows 自动启动默认关闭，可在应用“设置”中开启。
+3. 安装时可选是否创建桌面快捷方式；默认不勾选。完成后可从开始菜单启动。登录 Windows 自动启动默认关闭，可在应用“设置”中开启。
 
-部分未签名（unsigned）的发布版本可能触发 Windows SmartScreen 提示。这表示 Windows 无法验证发布者身份，并不等于应用已被安全检查证明有问题。请先确认安装包来自项目 GitHub Releases，并核对该版本发布页提供的 `checksums.txt`；只有确认来源可信且你愿意承担未签名软件风险时，才选择继续运行。不要运行来源不明的副本。
+正式发布的安装程序和应用程序均使用 Authenticode 签名，以便 Windows 验证发布者身份。新证书或下载量较少的版本仍可能暂时显示 SmartScreen 提示；签名不能保证 SmartScreen 信誉会立即建立。请确认安装包来自项目 GitHub Releases，并核对该版本发布页提供的 `checksums.txt`；不要运行来源不明的副本。
 
 ## 便携版
 

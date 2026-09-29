@@ -32,6 +32,9 @@ if ($checksumLines.Count -ne 7 -or $checksumLines[0] -notmatch '^# Signature sta
   throw 'checksums.txt must declare signature status and contain exactly six artifact hashes.'
 }
 $signatureStatus = $Matches[1]
+if ($signatureStatus -ne 'valid') {
+  throw 'Release artifacts must be Authenticode-signed; unsigned manifests are rejected.'
+}
 $listedHashes = @{}
 foreach ($line in $checksumLines | Select-Object -Skip 1) {
   if ($line -notmatch '^([A-Fa-f0-9]{64})  (.+)$') { throw "Invalid checksum line: $line" }

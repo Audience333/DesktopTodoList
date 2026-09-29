@@ -42,7 +42,7 @@ function New-Fixture([string]$Directory, [bool]$ExtraFile = $false) {
     Compress-Archive -Path (Join-Path $stage '*') -DestinationPath (Join-Path $Directory $portableName)
     Remove-Item -LiteralPath $stage -Recurse -Force
   }
-  & (Join-Path $repo 'scripts\write-checksums.ps1') -ArtifactsDirectory $Directory -SignatureStatus unsigned | Out-Null
+  & (Join-Path $repo 'scripts\write-checksums.ps1') -ArtifactsDirectory $Directory -SignatureStatus valid | Out-Null
   if ($ExtraFile) { [IO.File]::WriteAllText((Join-Path $Directory 'unexpected.txt'), 'not public') }
 }
 
@@ -58,7 +58,15 @@ try {
   $valid = Join-Path $work 'valid'
   New-Fixture $valid
   & $manifestScript -ArtifactsDirectory $valid -Version $Version -Tag $Tag | Out-Null
-  Write-Host '[PASS] Complete two-architecture unsigned release manifest'
+  Write-Host '[PASS] Complete signed x64/ARM64 release manifest'
+
+  $unsigned = Join-Path $work 'unsigned-status'
+  Copy-Item -LiteralPath $valid -Destination $unsigned -Recurse
+  $unsignedChecksums = Join-Path $unsigned 'checksums.txt'
+  $checksumLines = [IO.File]::ReadAllLines($unsignedChecksums)
+  $checksumLines[0] = '# Signature status: unsigned'
+  [IO.File]::WriteAllLines($unsignedChecksums, $checksumLines, [Text.UTF8Encoding]::new($false))
+  Assert-Rejected $unsigned 'an unsigned signature status'
 
   $missing = Join-Path $work 'missing'
   Copy-Item -LiteralPath $valid -Destination $missing -Recurse
@@ -69,7 +77,8 @@ try {
   Copy-Item -LiteralPath $valid -Destination $mismatch -Recurse
   $rejected = $false
   $mismatchedVersion = if ($Version -eq '0.0.0') { '0.0.1' } else { '0.0.0' }
-  try { & $manifestScript -ArtifactsDirectory $mismatch -Version $mismatchedVersion -Tag "v$mismatchedVersion" | Out-Null }
+  try { & $manifestScript -ArtifactsDirectory $mismatch -Version $mismatchedVersion `
+      -Tag "v$mismatchedVersion" | Out-Null }
   catch { $rejected = $true }
   if (-not $rejected) { throw 'Manifest incorrectly accepted artifacts whose version differs from the tag.' }
   Write-Host '[PASS] Manifest rejects an executable whose version differs from the tag'

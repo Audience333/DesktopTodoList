@@ -46,6 +46,10 @@ jobs:
             choco install innosetup --yes --no-progress
           }
 
+      - name: Verify release signing fails closed without secrets
+        shell: pwsh
+        run: ./native/tests/release/signing-policy-test.ps1
+
       - name: Configure ${{ matrix.arch }}
         shell: pwsh
         run: >-
@@ -85,20 +89,13 @@ jobs:
           if ($info.ProductVersion.Trim() -cne $env:RELEASE_VERSION) { throw "ARM64 product version mismatch: $($info.ProductVersion)" }
           Write-Host '[SKIP] Runtime execution requires an ARM64 Windows host.'
 
-      - name: Sign executable when certificate secrets are configured
+      - name: Sign executable
         shell: pwsh
         env:
           WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
           WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
         run: |
-          $hasCertificate = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_BASE64)
-          $hasPassword = -not [string]::IsNullOrEmpty($env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD)
-          if ($hasCertificate -xor $hasPassword) { throw 'Both signing secrets must be configured together.' }
-          if ($hasCertificate) {
-            ./scripts/sign-artifact.ps1 -Path "out/build/${{ matrix.arch }}/native/Release/DesktopTodoList.exe"
-          } else {
-            Write-Host 'No signing secrets configured; this release will be explicitly marked unsigned.'
-          }
+          ./scripts/sign-artifact.ps1 -Path "out/build/${{ matrix.arch }}/native/Release/DesktopTodoList.exe"
 
       - name: Build portable package
         shell: pwsh
@@ -114,15 +111,13 @@ jobs:
           -Exe "out/build/${{ matrix.arch }}/native/Release/DesktopTodoList.exe"
           -Architecture "${{ matrix.arch }}" -Version $env:RELEASE_VERSION
 
-      - name: Sign installer when certificate secrets are configured
+      - name: Sign installer
         shell: pwsh
         env:
           WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
           WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
         run: |
-          if (-not [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_BASE64)) {
-            ./scripts/sign-artifact.ps1 -Path "out/packages/$env:RELEASE_VERSION/${{ matrix.arch }}/DesktopTodoList-${{ matrix.arch }}-Setup.exe"
-          }
+          ./scripts/sign-artifact.ps1 -Path "out/packages/$env:RELEASE_VERSION/${{ matrix.arch }}/DesktopTodoList-${{ matrix.arch }}-Setup.exe"
 
       - name: Check x64 package contents and execution
         if: matrix.arch == 'x64'
@@ -141,6 +136,14 @@ jobs:
           -Package "out/packages/$env:RELEASE_VERSION/arm64/DesktopTodoList-arm64-portable.zip"
           -Architecture arm64 -Version $env:RELEASE_VERSION -SkipExecutableRun
           -Installer "out/packages/$env:RELEASE_VERSION/arm64/DesktopTodoList-arm64-Setup.exe"
+
+      - name: Verify optional desktop shortcut install task
+        if: matrix.arch == 'x64'
+        shell: pwsh
+        run: >-
+          ./native/tests/release/desktop-shortcut-test.ps1
+          -Executable out/build/x64/native/Release/DesktopTodoList.exe
+          -Version $env:RELEASE_VERSION
 
       - name: Stage release artifacts
         shell: pwsh
@@ -189,19 +192,10 @@ jobs:
           path: out/release-artifacts
           merge-multiple: true
 
-      - name: Determine and write signature status
-        id: signature
-        env:
-          WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
-          WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+      - name: Verify signatures and write checksums
         shell: pwsh
         run: |
-          $hasCertificate = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_BASE64)
-          $hasPassword = -not [string]::IsNullOrEmpty($env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD)
-          if ($hasCertificate -xor $hasPassword) { throw 'Both signing secrets must be configured together.' }
-          $status = if ($hasCertificate) { 'valid' } else { 'unsigned' }
-          ./scripts/write-checksums.ps1 -ArtifactsDirectory out/release-artifacts -SignatureStatus $status
-          "status=$status" >> $env:GITHUB_OUTPUT
+          ./scripts/write-checksums.ps1 -ArtifactsDirectory out/release-artifacts -SignatureStatus valid
 
       - name: Run positive and negative manifest tests
         shell: pwsh
@@ -223,16 +217,11 @@ jobs:
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          SIGNATURE_STATUS: ${{ steps.signature.outputs.status }}
         shell: pwsh
         run: |
           $tag = $env:GITHUB_REF_NAME
           $title = "DesktopTodoList $env:RELEASE_VERSION"
-          $notes = if ($env:SIGNATURE_STATUS -eq 'unsigned') {
-            'This release is unsigned. Windows SmartScreen may show an unknown-publisher warning.'
-          } else {
-            'The application and installer binaries have valid Authenticode signatures.'
-          }
+          $notes = 'Application and installer binaries are signed with Authenticode. SmartScreen may still show a warning while the publisher reputation is being established.'
           $files = @(Get-ChildItem -LiteralPath out/release-artifacts -File | ForEach-Object FullName | Sort-Object)
           $ghArgs = @('release', 'create', $tag) + $files + @('--title', $title, '--notes', $notes, '--verify-tag')
           & gh @ghArgs

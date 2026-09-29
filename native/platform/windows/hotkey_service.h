@@ -5,6 +5,7 @@
 
 #include <functional>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <unordered_map>
 
@@ -19,6 +20,8 @@ struct HotkeyChord {
 };
 
 [[nodiscard]] std::optional<HotkeyChord> parse_hotkey(std::wstring_view text);
+[[nodiscard]] std::wstring format_hotkey_registration_warning(
+    HotkeyAction action, std::wstring_view chord, DWORD error);
 
 struct HotkeyReplaceResult {
     bool success = false;

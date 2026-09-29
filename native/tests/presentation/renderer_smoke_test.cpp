@@ -3,6 +3,7 @@
 #include "presentation/renderer.h"
 
 #include <chrono>
+#include <cmath>
 #include <iostream>
 #include <string>
 #include <string_view>
@@ -44,6 +45,13 @@ private:
 };
 
 }  // namespace
+
+TEST_CASE(renderer_scale_compensates_for_system_and_window_dpi_mismatch) {
+    const auto scale = desktop_todo::renderer_scale_for_target_dpi(1.0F, 120.0F, 144.0F);
+
+    EXPECT_TRUE(std::abs(scale.width - 0.8F) < 0.001F);
+    EXPECT_TRUE(std::abs(scale.height - (96.0F / 144.0F)) < 0.001F);
+}
 
 TEST_CASE(renderer_smoke_draws_visible_rows_from_a_1000_task_snapshot_within_budget) {
     HiddenWindow window;

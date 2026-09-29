@@ -34,6 +34,10 @@ jobs:
             choco install innosetup --yes --no-progress
           }
 
+      - name: Verify release signing fails closed without secrets
+        shell: pwsh
+        run: ./native/tests/release/signing-policy-test.ps1
+
       - name: Configure ${{ matrix.arch }}
         shell: pwsh
         run: >-
@@ -103,6 +107,14 @@ jobs:
           -Package out/packages/2.0.0/arm64/DesktopTodoList-arm64-portable.zip
           -Architecture arm64 -Version 2.0.0 -SkipExecutableRun
           -Installer out/packages/2.0.0/arm64/DesktopTodoList-arm64-Setup.exe
+
+      - name: Verify optional desktop shortcut install task
+        if: matrix.arch == 'x64'
+        shell: pwsh
+        run: >-
+          ./native/tests/release/desktop-shortcut-test.ps1
+          -Executable out/build/x64/native/Release/DesktopTodoList.exe
+          -Version 2.0.0
 
       - name: Stage CI artifacts
         shell: pwsh

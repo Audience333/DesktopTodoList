@@ -83,14 +83,23 @@ TEST_CASE(widget_window_smoke_creates_and_destroys_integrated_native_widget) {
     EXPECT_TRUE(IsWindowVisible(widget.handle()) == FALSE);
     EXPECT_TRUE(widget.toggle_visibility());
     EXPECT_TRUE(IsWindowVisible(widget.handle()) != FALSE);
-    PostMessageW(widget.handle(), desktop_todo::kEditorNewTaskMessage, 0, 0);
-    drain_messages();
     const auto quick_add = GetDlgItem(widget.handle(), 501);
     const auto inline_title = GetDlgItem(widget.handle(), 502);
     const auto search = GetDlgItem(widget.handle(), 503);
     EXPECT_TRUE(quick_add != nullptr);
     EXPECT_TRUE(inline_title != nullptr);
     EXPECT_TRUE(search != nullptr);
+    RECT initial_client{};
+    GetClientRect(widget.handle(), &initial_client);
+    const auto initial_dpi = GetDpiForWindow(widget.handle());
+    const auto initial_layout = desktop_todo::calculate_layout(
+        {static_cast<float>(initial_client.right), static_cast<float>(initial_client.bottom)},
+        static_cast<float>(initial_dpi), desktop_todo::LayoutMode::compact);
+    const auto quick_add_point = client_point({
+        initial_layout.quick_add.x + initial_layout.quick_add.width / 2,
+        initial_layout.quick_add.y + initial_layout.quick_add.height / 2}, initial_dpi);
+    click_widget(widget.handle(), WM_LBUTTONUP, quick_add_point);
+    EXPECT_TRUE(IsWindowVisible(quick_add) != FALSE);
     EXPECT_TRUE(GetFocus() == quick_add);
 
     SendMessageW(quick_add, WM_KEYDOWN, VK_RETURN, 0);
@@ -176,6 +185,22 @@ TEST_CASE(widget_window_smoke_creates_and_destroys_integrated_native_widget) {
     SetFocus(widget.handle());
     drain_messages();
     EXPECT_EQ(task_by_id(L"new-id-2")->title, L"失焦已保存");
+
+    click_widget(widget.handle(), WM_LBUTTONUP, title_point);
+    EXPECT_TRUE(GetFocus() == inline_title);
+    SetWindowTextW(inline_title, L"点击添加前保存");
+    RECT quick_add_client{};
+    GetClientRect(widget.handle(), &quick_add_client);
+    const auto quick_add_layout = desktop_todo::calculate_layout(
+        {static_cast<float>(quick_add_client.right), static_cast<float>(quick_add_client.bottom)},
+        static_cast<float>(dpi), desktop_todo::LayoutMode::compact);
+    const auto add_task_point = client_point({
+        quick_add_layout.quick_add.x + quick_add_layout.quick_add.width / 2,
+        quick_add_layout.quick_add.y + quick_add_layout.quick_add.height / 2}, dpi);
+    click_widget(widget.handle(), WM_LBUTTONUP, add_task_point);
+    drain_messages();
+    EXPECT_EQ(task_by_id(L"new-id-2")->title, L"点击添加前保存");
+    EXPECT_TRUE(GetFocus() == quick_add);
 
     click_widget(widget.handle(), WM_LBUTTONDBLCLK, title_point);
     RECT expanded_client{};

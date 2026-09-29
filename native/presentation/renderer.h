@@ -20,6 +20,9 @@
 
 namespace desktop_todo {
 
+[[nodiscard]] D2D1_SIZE_F renderer_scale_for_target_dpi(
+    float layout_scale, float target_dpi_x, float target_dpi_y) noexcept;
+
 class RendererState {
 public:
     [[nodiscard]] bool resources_ready() const noexcept { return resources_ready_; }

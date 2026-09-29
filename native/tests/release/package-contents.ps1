@@ -93,6 +93,9 @@ try {
     '(?m)^DefaultDirName=\{localappdata\}\\Programs\\DesktopTodoList\s*$',
     'x64compatible and not arm64',
     '(?m)^\s*#define AllowedArchitectures "arm64"\s*$',
+    '(?m)^Name: "desktopicon"; Description: "\{cm:CreateDesktopShortcut\}"; Flags: unchecked\s*$',
+    '(?m)^Name: "\{code:GetDesktopShortcutDirectory\}\\DesktopTodoList"; Filename: "\{app\}\\DesktopTodoList\.exe";.*Tasks: desktopicon; AppUserModelID: "DesktopTodoList\.Native"\s*$',
+    "Result := ExpandConstant\('\{autodesktop\}'\)",
     'AppUserModelID:\s*"DesktopTodoList\.Native"',
     '\{cm:UninstallProgram,DesktopTodoList\}'
   )) {
@@ -106,6 +109,10 @@ try {
   }
   foreach ($pattern in @('UninstallProgram=卸载 %1', 'LaunchProgram=启动 %1')) {
     if ($languageMessages -notmatch $pattern) { throw "Installer language file is missing required localized text: $pattern" }
+  }
+  if ($installerScriptContent -notmatch '(?m)^english\.CreateDesktopShortcut=Create a desktop shortcut\s*$' -or
+      $languageMessages -notmatch '(?m)^CreateDesktopShortcut=创建桌面快捷方式\s*$') {
+    throw 'Desktop shortcut installation choice is missing localized English or Chinese text.'
   }
   if ($installerScriptContent -match '(?i)HKCU.*CurrentVersion\\Run|CurrentVersion\\Run.*HKCU') {
     throw 'Installer must not enable autostart before the user opts in.'

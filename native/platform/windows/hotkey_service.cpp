@@ -82,6 +82,21 @@ std::optional<HotkeyChord> parse_hotkey(std::wstring_view text) {
     return HotkeyChord{modifiers, key};
 }
 
+std::wstring format_hotkey_registration_warning(
+    HotkeyAction action, std::wstring_view chord, DWORD error) {
+    const auto action_name = action == HotkeyAction::show_hide
+        ? L"全局显示快捷键" : L"交互恢复快捷键";
+    auto warning = std::wstring{action_name} + L" " + std::wstring{chord} +
+        L" 无法注册（Windows 错误码 " + std::to_wstring(error) +
+        L"）。请在设置中更换快捷键。";
+    if (action == HotkeyAction::show_hide) {
+        warning += L"仍可通过通知区域图标显示窗口。";
+    } else {
+        warning += L"鼠标穿透保持禁用，以免窗口无法找回。";
+    }
+    return warning;
+}
+
 HotkeyService::HotkeyService(Register register_hotkey, Unregister unregister_hotkey)
     : register_(std::move(register_hotkey)), unregister_(std::move(unregister_hotkey)) {}
 

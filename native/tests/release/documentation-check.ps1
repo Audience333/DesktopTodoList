@@ -29,8 +29,14 @@ $requirements['release download choices'] = [bool]((($allText -match 'GitHub Rel
 $requirements['x64 and ARM64 selection guidance'] = [bool](($allText -match '(?i)x64.{0,80}(ARM64|arm64)') -or
   ($allText -match '(?i)ARM64.{0,80}x64'))
 $requirements['portable archive use'] = [bool](($allText -match '(?i)portable') -and ($allText -match '(?i)extract'))
-$requirements['unsigned SmartScreen warning'] = [bool](($allText -match '(?i)SmartScreen') -and
-  ($allText -match '(?i)unsigned'))
+$requirements['Authenticode signing and SmartScreen reputation guidance'] = [bool](
+  ($texts['install.md'] -match '(?i)Authenticode') -and
+  ($texts['install.md'] -match '(?i)SmartScreen') -and
+  ($texts['install.md'] -match '信誉|reputation'))
+$requirements['optional desktop shortcut defaults off'] = [bool](
+  $texts['install.md'] -match '创建桌面快捷方式；默认不勾选')
+$requirements['autostart defaults off'] = [bool](
+  $texts['install.md'] -match '自动启动默认关闭')
 $requirements['data and backup paths'] = [bool](($allText -match '%LOCALAPPDATA%\\DesktopTodoList') -and
   ($allText -match 'data\.json') -and ($allText -match 'backups'))
 $requirements['export and import migration'] = [bool](($allText -match '(?i)export JSON') -and

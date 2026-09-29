@@ -8,6 +8,16 @@
 
 namespace desktop_todo {
 
+D2D1_SIZE_F renderer_scale_for_target_dpi(
+    float layout_scale, float target_dpi_x, float target_dpi_y) noexcept {
+    constexpr float kDipsPerInch = 96.0F;
+    if (target_dpi_x <= 0.0F) target_dpi_x = kDipsPerInch;
+    if (target_dpi_y <= 0.0F) target_dpi_y = kDipsPerInch;
+    return D2D1::SizeF(
+        layout_scale * kDipsPerInch / target_dpi_x,
+        layout_scale * kDipsPerInch / target_dpi_y);
+}
+
 Renderer::Renderer(HWND window) : window_(window) {
     static_cast<void>(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,
         __uuidof(ID2D1Factory), nullptr,
@@ -136,7 +146,12 @@ void Renderer::draw(
         return;
     }
 
-    target_->SetTransform(D2D1::Matrix3x2F::Scale(layout.scale, layout.scale));
+    FLOAT target_dpi_x = 96.0F;
+    FLOAT target_dpi_y = 96.0F;
+    target_->GetDpi(&target_dpi_x, &target_dpi_y);
+    const auto render_scale = renderer_scale_for_target_dpi(
+        layout.scale, target_dpi_x, target_dpi_y);
+    target_->SetTransform(D2D1::Matrix3x2F::Scale(render_scale.width, render_scale.height));
     target_->BeginDraw();
     target_->Clear(color(palette.background));
     const auto quick = D2D1::RoundedRect(

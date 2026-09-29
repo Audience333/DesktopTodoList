@@ -12,7 +12,9 @@ Run `scripts/verify-native-release.ps1 -Version <version> -Artifacts <complete-r
 - [x] Installer and portable ZIP sizes are recorded by the gate.
 - [x] Public package/source checks find no HTML/JavaScript runtime, browser/WebView, localhost service, PowerShell dependency, or unexpected network URL.
 - [x] Documentation checks and the unique FR/NFR evidence matrix pass (79 requirement IDs).
-- [x] Release manifest contains exactly six payload files and checksum entries, with signature state explicitly `unsigned`.
+- [x] Historical v2.0.0 release manifest contained exactly six payload files and checksum entries; that version was explicitly `unsigned`.
+- [ ] New releases fail closed unless the x64/ARM64 executables and installers all carry valid Authenticode signatures. Configure repository Actions secrets `WINDOWS_SIGNING_CERTIFICATE_BASE64` and `WINDOWS_SIGNING_CERTIFICATE_PASSWORD` before publishing; SmartScreen reputation may still take time to establish.
+- [ ] Installer integration test confirms the desktop shortcut task is off by default, creates the shortcut when selected, and removes it on uninstall.
 
 ## Manual environment checks
 
@@ -24,5 +26,5 @@ The local Visual Studio installation has no usable ARM64 compiler. Genuine ARM64
 
 - [x] Review the generated gate report and all remaining `SKIP` items; 13 checks pass, none fail, and six environment checks remain explicitly skipped.
 - [ ] Confirm release tag `v<version>`, artifacts, `checksums.txt`, and GitHub release title match.
-- [ ] If unsigned, keep the SmartScreen warning in release notes; if signed, validate Authenticode status and protect signing secrets.
+- [ ] Verify Authenticode status and protect signing secrets; explain that signing identifies the publisher but does not guarantee immediate SmartScreen reputation.
 - [ ] Publish only after the CI release workflow's manifest gate succeeds.

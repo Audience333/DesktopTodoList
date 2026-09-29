@@ -212,20 +212,26 @@ public:
         SetTimer(message_, kReminderTimer, 60'000, nullptr);
         deliver_pending_reminders();
         hotkeys_ = std::make_unique<HotkeyService>(message_);
-        const auto hotkey = parse_hotkey(service_.snapshot().settings.hotkey);
+        const auto settings = service_.snapshot().settings;
+        const auto hotkey = parse_hotkey(settings.hotkey);
         if (hotkey.has_value()) {
             const auto registered = hotkeys_->replace(HotkeyAction::show_hide, *hotkey);
             if (!registered.success) {
-                MessageBoxW(nullptr, L"全局显示快捷键无法注册，可能与其他程序冲突。仍可通过通知区域图标显示窗口。",
+                const auto warning = format_hotkey_registration_warning(
+                    HotkeyAction::show_hide, settings.hotkey, registered.error);
+                MessageBoxW(nullptr, warning.c_str(),
                     L"DesktopTodoList", MB_OK | MB_ICONWARNING);
             }
         }
-        const auto recovery_hotkey = parse_hotkey(service_.snapshot().settings.selectable_hotkey);
+        const auto recovery_hotkey = parse_hotkey(settings.selectable_hotkey);
         if (recovery_hotkey.has_value()) {
             const auto registered = hotkeys_->replace(
                 HotkeyAction::toggle_interaction, *recovery_hotkey);
             if (!registered.success) {
-                MessageBoxW(nullptr, L"交互恢复快捷键无法注册。鼠标穿透选项将保持禁用，以免窗口无法找回。",
+                const auto warning = format_hotkey_registration_warning(
+                    HotkeyAction::toggle_interaction, settings.selectable_hotkey,
+                    registered.error);
+                MessageBoxW(nullptr, warning.c_str(),
                     L"DesktopTodoList", MB_OK | MB_ICONWARNING);
             }
         }

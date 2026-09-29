@@ -171,7 +171,11 @@ bool WidgetWindow::toggle_visibility() {
 }
 
 void WidgetWindow::begin_new_task() {
-    if (text_editor_) text_editor_->begin_new_task();
+    if (!text_editor_) return;
+    if (text_editor_->active_control() == NativeEditorControl::inline_title) {
+        commit_inline_title();
+    }
+    text_editor_->begin_new_task();
 }
 
 void WidgetWindow::set_file_drop_handler(
@@ -418,7 +422,7 @@ LRESULT WidgetWindow::handle_message(UINT message, WPARAM wparam, LPARAM lparam)
     case WM_KEYDOWN:
         if (text_editor_ && (message == kEditorNewTaskMessage ||
             (wparam == 'N' && (GetKeyState(VK_CONTROL) & 0x8000) != 0))) {
-            text_editor_->begin_new_task();
+            begin_new_task();
             return 0;
         }
         if (text_editor_ && (message == kEditorSearchMessage ||
@@ -693,6 +697,11 @@ void WidgetWindow::handle_pointer(POINT client_point) {
     const auto layout = current_layout(window_, dpi_);
     if (selection_toolbar_ && selection_toolbar_->state().visible &&
         logical.y >= layout.footer.y && logical.y < layout.footer.bottom()) return;
+    if (logical.x >= layout.quick_add.x && logical.x < layout.quick_add.right() &&
+        logical.y >= layout.quick_add.y && logical.y < layout.quick_add.bottom()) {
+        begin_new_task();
+        return;
+    }
     if (logical.x >= layout.tabs.x && logical.x < layout.tabs.right() &&
         logical.y >= layout.tabs.y && logical.y < layout.tabs.bottom()) {
         const auto tab_width = layout.tabs.width / 4.0F;

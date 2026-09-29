@@ -12,12 +12,13 @@
 #define TroubleshootingGuidePath "@TroubleshootingGuidePath@"
 #define TestDataDirectory "@TestDataDirectory@"
 #define TestAutostartName "@TestAutostartName@"
+#define TestDesktopDirectory "@TestDesktopDirectory@"
 
 #if TestAutostartName == ""
   #define InstallerAppId "DesktopTodoList.Native"
   #define ProgramGroup "DesktopTodoList"
 #else
-  #define InstallerAppId "DesktopTodoList.Native.Test"
+  #define InstallerAppId "DesktopTodoList.Native.Test." + TestAutostartName
   #define ProgramGroup "DesktopTodoListTest"
 #endif
 
@@ -65,6 +66,7 @@ Name: "chinesesimp"; MessagesFile: "compiler:Default.isl,{#MessagesFilePath}"
 
 [CustomMessages]
 english.RemoveUserDataPrompt=Also remove DesktopTodoList tasks, settings, and backups from this Windows user?
+english.CreateDesktopShortcut=Create a desktop shortcut
 
 [Files]
 Source: "{#ExePath}"; DestDir: "{app}"; Flags: ignoreversion
@@ -78,6 +80,10 @@ Source: "{#TroubleshootingGuidePath}"; DestDir: "{app}\docs"; DestName: "trouble
 [Icons]
 Name: "{group}\DesktopTodoList"; Filename: "{app}\DesktopTodoList.exe"; WorkingDir: "{app}"; AppUserModelID: "DesktopTodoList.Native"
 Name: "{group}\{cm:UninstallProgram,DesktopTodoList}"; Filename: "{uninstallexe}"
+Name: "{code:GetDesktopShortcutDirectory}\DesktopTodoList"; Filename: "{app}\DesktopTodoList.exe"; WorkingDir: "{app}"; Tasks: desktopicon; AppUserModelID: "DesktopTodoList.Native"
+
+[Tasks]
+Name: "desktopicon"; Description: "{cm:CreateDesktopShortcut}"; Flags: unchecked
 
 [Run]
 Filename: "{app}\DesktopTodoList.exe"; Description: "{cm:LaunchProgram,DesktopTodoList}"; Flags: nowait postinstall skipifsilent
@@ -107,6 +113,16 @@ begin
   for Index := 1 to Length(ProfileId) do
     if Pos(Lowercase(Copy(ProfileId, Index, 1)), '0123456789abcdef') = 0 then
       Result := '';
+#endif
+end;
+
+function GetDesktopShortcutDirectory(Param: String): String;
+#if TestDesktopDirectory == ""
+begin
+  Result := ExpandConstant('{autodesktop}');
+#else
+begin
+  Result := '{#TestDesktopDirectory}';
 #endif
 end;
 

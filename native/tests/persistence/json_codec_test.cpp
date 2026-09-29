@@ -121,6 +121,15 @@ TEST_CASE(json_codec_rejects_future_schema) {
     EXPECT_TRUE(!future.state.has_value() && !future.error.empty());
 }
 
+TEST_CASE(json_codec_fresh_install_starts_visible_without_automatic_startup) {
+    const auto decoded = desktop_todo::decode_state_utf8(
+        bytes(R"({"schemaVersion":1,"tasks":[],"settings":{}})"));
+
+    EXPECT_TRUE(decoded.state.has_value());
+    EXPECT_TRUE(!decoded.state->settings.auto_start);
+    EXPECT_TRUE(!decoded.state->settings.start_minimized);
+}
+
 TEST_CASE(json_codec_drops_blank_title_task_with_issue) {
     const auto decoded = desktop_todo::decode_state_utf8(bytes(
         R"({"schemaVersion":1,"tasks":[{"id":"bad","title":"   ","createdAt":"2026-09-26T01:00:00.000Z","updatedAt":"2026-09-26T01:00:00.000Z"}],"settings":{}})"));

@@ -16,6 +16,19 @@ TEST_CASE(hotkey_service_parses_default_show_hide_chord) {
     EXPECT_EQ(chord->virtual_key, static_cast<UINT>('T'));
 }
 
+TEST_CASE(hotkey_service_warning_identifies_conflicting_chord_and_windows_error) {
+    const auto warning = format_hotkey_registration_warning(
+        HotkeyAction::show_hide, L"Ctrl+Alt+T", ERROR_HOTKEY_ALREADY_REGISTERED);
+    const auto recovery_warning = format_hotkey_registration_warning(
+        HotkeyAction::toggle_interaction, L"Ctrl+Alt+L", ERROR_HOTKEY_ALREADY_REGISTERED);
+
+    EXPECT_TRUE(warning.find(L"Ctrl+Alt+T") != std::wstring::npos);
+    EXPECT_TRUE(warning.find(std::to_wstring(ERROR_HOTKEY_ALREADY_REGISTERED)) != std::wstring::npos);
+    EXPECT_TRUE(warning.find(L"设置") != std::wstring::npos);
+    EXPECT_TRUE(recovery_warning.find(L"Ctrl+Alt+L") != std::wstring::npos);
+    EXPECT_TRUE(recovery_warning.find(L"鼠标穿透保持禁用") != std::wstring::npos);
+}
+
 TEST_CASE(hotkey_service_reports_conflict_without_losing_previous_registration) {
     std::map<int, HotkeyChord> registered;
     std::vector<int> removed;
@@ -81,4 +94,3 @@ TEST_CASE(hotkey_service_successfully_replaces_registration_and_routes_new_id) {
     EXPECT_EQ(service.action_for(*new_id), HotkeyAction::show_hide);
     EXPECT_EQ(service.chord(HotkeyAction::show_hide), new_chord);
 }
-

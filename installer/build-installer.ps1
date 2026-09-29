@@ -9,7 +9,8 @@ param(
   [string]$Privacy = (Join-Path $PSScriptRoot '..\docs\privacy.md'),
   [string]$License = (Join-Path $PSScriptRoot '..\LICENSE.txt'),
   [string]$TestDataDirectory = '',
-  [string]$TestAutostartName = ''
+  [string]$TestAutostartName = '',
+  [string]$TestDesktopDirectory = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -65,6 +66,9 @@ $installGuidePath = (Resolve-Path -LiteralPath (Join-Path $docsPath 'install.md'
 $migrationGuidePath = (Resolve-Path -LiteralPath (Join-Path $docsPath 'migrate-from-web-version.md')).Path
 $troubleshootingGuidePath = (Resolve-Path -LiteralPath (Join-Path $docsPath 'troubleshooting.md')).Path
 if ($TestDataDirectory) {
+  if (-not $TestAutostartName -or -not $TestDesktopDirectory) {
+    throw 'TestDataDirectory requires matching TestAutostartName and TestDesktopDirectory values.'
+  }
   $testDataPath = [IO.Path]::GetFullPath($TestDataDirectory)
   $safeParent = [IO.Path]::GetFullPath((Join-Path ([IO.Path]::GetTempPath()) 'DesktopTodoListTestProfiles'))
   $expectedRoot = [IO.Path]::GetFullPath((Join-Path (Split-Path -Parent (Split-Path -Parent $testDataPath)) ''))
@@ -81,9 +85,18 @@ if ($TestDataDirectory) {
   if ($TestAutostartName -ne $expectedRegistryName) {
     throw "TestAutostartName must match this profile exactly: $expectedRegistryName"
   }
+  $testDesktopPath = [IO.Path]::GetFullPath($TestDesktopDirectory)
+  $expectedDesktopPath = [IO.Path]::GetFullPath((Join-Path $expectedRoot 'Desktop'))
+  if (-not [string]::Equals($testDesktopPath, $expectedDesktopPath, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "TestDesktopDirectory must be the exact Desktop folder for this isolated profile: $expectedDesktopPath"
+  }
+  $testDesktopPath = $testDesktopPath.Replace("'", "''")
 } else {
-  if ($TestAutostartName) { throw 'TestAutostartName requires a valid TestDataDirectory.' }
+  if ($TestAutostartName -or $TestDesktopDirectory) {
+    throw 'TestAutostartName and TestDesktopDirectory require a valid TestDataDirectory.'
+  }
   $testDataPath = ''
+  $testDesktopPath = ''
 }
 
 $values = @{
@@ -101,6 +114,7 @@ $values = @{
   '@TroubleshootingGuidePath@' = $troubleshootingGuidePath
   '@TestDataDirectory@' = $testDataPath
   '@TestAutostartName@' = $TestAutostartName
+  '@TestDesktopDirectory@' = $testDesktopPath
 }
 $rendered = [IO.File]::ReadAllText($scriptPath)
 foreach ($token in $values.Keys) {
