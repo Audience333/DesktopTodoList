@@ -165,7 +165,7 @@ Invoke-Check 'Legacy browser runtime and obsolete tests are retired' {
   if (-not (Test-Path -LiteralPath $legacyAbsenceCheck -PathType Leaf)) { throw 'Legacy runtime absence check is missing.' }
   $pwshCommand = Get-Command 'pwsh.exe' -ErrorAction SilentlyContinue
   if (-not $pwshCommand) { throw 'PowerShell 7 (pwsh.exe) is required for the legacy runtime check.' }
-  $output = @(& $pwshCommand.Source -NoProfile -ExecutionPolicy Bypass -File $legacyAbsenceCheck 2>&1)
+  $output = @(& $pwshCommand.Source -NoProfile -ExecutionPolicy Bypass -File $legacyAbsenceCheck -Root $root -ArtifactsDirectory $artifactPath 2>&1)
   $code = $LASTEXITCODE
   $output | ForEach-Object { Write-Host "  $_" }
   if ($code -ne 0) { throw "Legacy runtime absence check exited $code." }
