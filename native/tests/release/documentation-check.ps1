@@ -37,6 +37,12 @@ $requirements['optional desktop shortcut defaults off'] = [bool](
   $texts['install.md'] -match '创建桌面快捷方式；默认不勾选')
 $requirements['autostart defaults off'] = [bool](
   $texts['install.md'] -match '自动启动默认关闭')
+$requirements['README feature overview'] = [bool](
+  ($texts['README.md'] -match '原生 Windows 悬浮窗口') -and
+  ($texts['README.md'] -match '今天、本周、全部和已完成') -and
+  ($texts['README.md'] -match '快速添加') -and
+  ($texts['README.md'] -match '默认关闭') -and
+  ($texts['README.md'] -match '默认不创建'))
 $requirements['data and backup paths'] = [bool](($allText -match '%LOCALAPPDATA%\\DesktopTodoList') -and
   ($allText -match 'data\.json') -and ($allText -match 'backups'))
 $requirements['export and import migration'] = [bool](($allText -match '(?i)export JSON') -and

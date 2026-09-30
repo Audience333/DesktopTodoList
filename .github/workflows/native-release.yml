@@ -39,6 +39,17 @@ jobs:
           "RELEASE_VERSION=$version" >> $env:GITHUB_ENV
           "version=$version" >> $env:GITHUB_OUTPUT
 
+      - name: Require Authenticode signing secrets
+        env:
+          WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
+          WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_BASE64) -or
+              [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD)) {
+            throw 'Configure both repository Actions signing secrets before publishing.'
+          }
+
       - name: Install Inno Setup
         shell: pwsh
         run: |
@@ -221,8 +232,11 @@ jobs:
         run: |
           $tag = $env:GITHUB_REF_NAME
           $title = "DesktopTodoList $env:RELEASE_VERSION"
-          $notes = 'Application and installer binaries are signed with Authenticode. SmartScreen may still show a warning while the publisher reputation is being established.'
+          $notesPath = "docs/releases/v$env:RELEASE_VERSION.md"
+          if (-not (Test-Path -LiteralPath $notesPath -PathType Leaf)) {
+            throw "Release notes are missing: $notesPath"
+          }
           $files = @(Get-ChildItem -LiteralPath out/release-artifacts -File | ForEach-Object FullName | Sort-Object)
-          $ghArgs = @('release', 'create', $tag) + $files + @('--title', $title, '--notes', $notes, '--verify-tag')
+          $ghArgs = @('release', 'create', $tag) + $files + @('--title', $title, '--notes-file', $notesPath, '--verify-tag')
           & gh @ghArgs
           if ($LASTEXITCODE -ne 0) { throw "GitHub Release creation failed with exit code $LASTEXITCODE." }

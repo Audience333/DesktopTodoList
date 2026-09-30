@@ -13,6 +13,7 @@ Run `scripts/verify-native-release.ps1 -Version <version> -Artifacts <complete-r
 - [x] Public package/source checks find no HTML/JavaScript runtime, browser/WebView, localhost service, PowerShell dependency, or unexpected network URL.
 - [x] Documentation checks and the unique FR/NFR evidence matrix pass (79 requirement IDs).
 - [x] Historical v2.0.0 release manifest contained exactly six payload files and checksum entries; that version was explicitly `unsigned`.
+- [x] Version 2.0.1 release notes are versioned in `docs/releases/v2.0.1.md` and attached by the tag-release workflow.
 - [ ] New releases fail closed unless the x64/ARM64 executables and installers all carry valid Authenticode signatures. Configure repository Actions secrets `WINDOWS_SIGNING_CERTIFICATE_BASE64` and `WINDOWS_SIGNING_CERTIFICATE_PASSWORD` before publishing; SmartScreen reputation may still take time to establish.
 - [ ] Installer integration test confirms the desktop shortcut task is off by default, creates the shortcut when selected, and removes it on uninstall.
 
