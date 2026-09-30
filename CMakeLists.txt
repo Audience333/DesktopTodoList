@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-set(DESKTOP_TODO_VERSION "2.0.1" CACHE STRING "DesktopTodoList semantic version")
+set(DESKTOP_TODO_VERSION "2.0.2" CACHE STRING "DesktopTodoList semantic version")
 include(cmake/Version.cmake)
 
 project(DesktopTodoList VERSION "${DESKTOP_TODO_VERSION}" LANGUAGES CXX)

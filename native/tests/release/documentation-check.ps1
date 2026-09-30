@@ -32,7 +32,10 @@ $requirements['portable archive use'] = [bool](($allText -match '(?i)portable') 
 $requirements['Authenticode signing and SmartScreen reputation guidance'] = [bool](
   ($texts['install.md'] -match '(?i)Authenticode') -and
   ($texts['install.md'] -match '(?i)SmartScreen') -and
-  ($texts['install.md'] -match '信誉|reputation'))
+  ($texts['install.md'] -match '信誉|reputation') -and
+  ($texts['install.md'] -match 'Signature status') -and
+  ($texts['install.md'] -match 'unsigned') -and
+  ($texts['install.md'] -match 'v2\.0\.2'))
 $requirements['optional desktop shortcut defaults off'] = [bool](
   $texts['install.md'] -match '创建桌面快捷方式；默认不勾选')
 $requirements['autostart defaults off'] = [bool](

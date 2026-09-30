@@ -34,9 +34,13 @@ jobs:
             choco install innosetup --yes --no-progress
           }
 
-      - name: Verify release signing fails closed without secrets
+      - name: Verify standalone signer requires complete secrets
         shell: pwsh
         run: ./native/tests/release/signing-policy-test.ps1
+
+      - name: Verify signed and unsigned release policy
+        shell: pwsh
+        run: ./native/tests/release/release-signature-status-test.ps1
 
       - name: Verify release workflow and user documentation
         shell: pwsh
@@ -49,7 +53,7 @@ jobs:
         run: >-
           cmake -S . -B "out/build/${{ matrix.arch }}" -G "Visual Studio 17 2022"
           -A "${{ matrix.platform }}"
-          "-DDESKTOP_TODO_VERSION=2.0.1"
+          "-DDESKTOP_TODO_VERSION=2.0.2"
 
       - name: Build release binaries
         shell: pwsh
@@ -71,7 +75,7 @@ jobs:
         shell: pwsh
         run: >-
           ./native/tests/release/resource-metadata.ps1
-          -Exe out/build/x64/native/Release/DesktopTodoList.exe -Version 2.0.1
+          -Exe out/build/x64/native/Release/DesktopTodoList.exe -Version 2.0.2
 
       - name: Verify ARM64 metadata without executing the foreign binary
         if: matrix.arch == 'arm64'
@@ -79,7 +83,7 @@ jobs:
         run: |
           $exe = 'out/build/arm64/native/Release/DesktopTodoList.exe'
           $info = [Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $exe))
-          if ($info.ProductVersion.Trim() -cne '2.0.1') { throw "ARM64 product version mismatch: $($info.ProductVersion)" }
+          if ($info.ProductVersion.Trim() -cne '2.0.2') { throw "ARM64 product version mismatch: $($info.ProductVersion)" }
           Write-Host '[SKIP] Runtime execution requires an ARM64 Windows host.'
 
       - name: Build portable package
@@ -87,32 +91,32 @@ jobs:
         run: >-
           ./scripts/package-portable.ps1
           -Exe "out/build/${{ matrix.arch }}/native/Release/DesktopTodoList.exe"
-          -Architecture "${{ matrix.arch }}" -Version 2.0.1
+          -Architecture "${{ matrix.arch }}" -Version 2.0.2
 
       - name: Build per-user installer
         shell: pwsh
         run: >-
           ./installer/build-installer.ps1
           -Exe "out/build/${{ matrix.arch }}/native/Release/DesktopTodoList.exe"
-          -Architecture "${{ matrix.arch }}" -Version 2.0.1
+          -Architecture "${{ matrix.arch }}" -Version 2.0.2
 
       - name: Check x64 package contents and execution
         if: matrix.arch == 'x64'
         shell: pwsh
         run: >-
           ./native/tests/release/package-contents.ps1
-          -Package out/packages/2.0.1/x64/DesktopTodoList-x64-portable.zip
-          -Architecture x64 -Version 2.0.1
-          -Installer out/packages/2.0.1/x64/DesktopTodoList-x64-Setup.exe
+          -Package out/packages/2.0.2/x64/DesktopTodoList-x64-portable.zip
+          -Architecture x64 -Version 2.0.2
+          -Installer out/packages/2.0.2/x64/DesktopTodoList-x64-Setup.exe
 
       - name: Check ARM64 package contents without execution
         if: matrix.arch == 'arm64'
         shell: pwsh
         run: >-
           ./native/tests/release/package-contents.ps1
-          -Package out/packages/2.0.1/arm64/DesktopTodoList-arm64-portable.zip
-          -Architecture arm64 -Version 2.0.1 -SkipExecutableRun
-          -Installer out/packages/2.0.1/arm64/DesktopTodoList-arm64-Setup.exe
+          -Package out/packages/2.0.2/arm64/DesktopTodoList-arm64-portable.zip
+          -Architecture arm64 -Version 2.0.2 -SkipExecutableRun
+          -Installer out/packages/2.0.2/arm64/DesktopTodoList-arm64-Setup.exe
 
       - name: Verify optional desktop shortcut install task
         if: matrix.arch == 'x64'
@@ -120,12 +124,12 @@ jobs:
         run: >-
           ./native/tests/release/desktop-shortcut-test.ps1
           -Executable out/build/x64/native/Release/DesktopTodoList.exe
-          -Version 2.0.1
+          -Version 2.0.2
 
       - name: Stage CI artifacts
         shell: pwsh
         run: |
-          $source = "out/packages/2.0.1/${{ matrix.arch }}"
+          $source = "out/packages/2.0.2/${{ matrix.arch }}"
           $target = "out/ci-release/${{ matrix.arch }}"
           New-Item -ItemType Directory -Path $target -Force | Out-Null
           Copy-Item "out/build/${{ matrix.arch }}/native/Release/DesktopTodoList.exe" "$target/DesktopTodoList-${{ matrix.arch }}.exe"

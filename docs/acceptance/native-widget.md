@@ -1,12 +1,12 @@
 # Native desktop widget acceptance report
 
-- Run: 2026-09-29 18:00:42 +08:00
+- Run: 2026-09-30 14:23:01 +08:00
 - OS: Windows 10 Pro build 26200.9457
 - Architecture: X64
 - System DPI: 96
 - Monitors: 2
 - Configuration: Debug
-- Build directory: E:\DesktopTodoList\out\build\native-release-gate-ninja
+- Build directory: E:\DesktopTodoList\out\build\release-2.0.2-x64
 - Existing DesktopTodoList process: none
 - Result: 18 PASS, 0 FAIL, 8 SKIP
 
@@ -28,7 +28,7 @@
 | PASS | 布局、DPI 缩放和屏幕边界模型 | 覆盖测试：native.layout, native.renderer_state |
 | PASS | 持久化、退出刷新逻辑 | 覆盖测试：native.state_repository, native.app_service |
 | PASS | 1000 项任务虚拟化与渲染性能 | 覆盖测试：native.task_list_view, native.renderer_smoke |
-| PASS | 本机状态载入、导入和强制落盘 | --verify-core 返回 0，用时 1,034 ms。 |
+| PASS | 本机状态载入、导入和强制落盘 | --verify-core 返回 0，用时 1,024 ms。 |
 | PASS | 运行过程未创建浏览器、WebView、localhost 或 PowerShell 宿主 | 核心验收前后未出现这些新进程，且原生运行路径未调用 WebView、浏览器/脚本子进程或 localhost 服务入口。 |
 | SKIP | 冷启动耗时（≤1 秒）及空闲内存（<120 MB） | 本次自动验收不启动交互式 GUI；需在专用桌面会话手动执行相应检查。 |
 | SKIP | 真实双开时只保留一个窗口并激活既有实例 | 本次自动验收不启动交互式 GUI；需在专用桌面会话手动执行相应检查。 |

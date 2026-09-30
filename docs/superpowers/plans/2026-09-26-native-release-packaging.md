@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Produce installable and portable x64/ARM64 releases, verify upgrade and uninstall behavior, and publish only fully Authenticode-signed artifacts to GitHub Releases from version tags.
+**Goal:** Produce installable and portable x64/ARM64 releases, verify upgrade and uninstall behavior, and publish accurately verified Authenticode-signed artifacts by default, with explicitly approved unsigned exceptions clearly labeled.
 
 **Architecture:** CMake produces deterministic native binaries and resource metadata; architecture-specific installer scripts package per-user installations without elevation. A release verification script is the single gate used locally and in GitHub Actions before artifacts and SHA-256 checksums are uploaded.
 
@@ -18,7 +18,8 @@
 - Runtime remains offline and must not contain update checks, telemetry, remote URLs, browser, or PowerShell dependencies.
 - Portable application target remains below 5 MB; installer and ZIP sizes are recorded separately.
 - Uninstall defaults to preserving user data and offers an explicit data-removal option.
-- Follow-up release policy (2026-09-29): executable and installer signatures are required for both architectures; signing failure or missing secrets must block publication. Fixture-only manifest tests may use unsigned payloads explicitly.
+- Follow-up release policy (2026-09-29): executable and installer signatures are required for both architectures. Approved release exception (2026-09-30): v2.0.2 may publish unsigned because no signing certificate is available. The workflow records `unsigned`, rejects an incomplete secret pair, verifies actual signature state and hashes, and clearly warns users; do not treat this exception as signed acceptance evidence.
+- Approved release exception (2026-09-30): v2.0.2 may publish unsigned because the user cannot provide a signing certificate. The workflow records `unsigned`, rejects an incomplete secret pair, verifies actual signature state and hashes, and clearly warns users; do not treat this exception as signed acceptance evidence.
 - Every production change starts with a failing verification and ends with a focused commit.
 
 ## Review Focus
@@ -156,12 +157,12 @@
 - Create: `native/tests/release/release-manifest.ps1`
 
 **Interfaces:**
-- Consumes: Git tag `vMAJOR.MINOR.PATCH`; required signing secrets; build and packaging scripts from prior tasks.
+- Consumes: Git tag `vMAJOR.MINOR.PATCH`; either a complete signing-secret pair or no signing secrets; build and packaging scripts from prior tasks.
 - Produces: six architecture-specific public artifacts plus `checksums.txt`, with release publication blocked unless the complete manifest passes.
 
 - [x] **Step 1: Write a failing release-manifest test**
 
-  Assert exact filenames, both architectures, PE machine types, matching embedded/tag versions, nonempty packages, SHA-256 line for every artifact, no extra public file, and valid Authenticode signatures. Unsigned manifests must be rejected by the same production verifier used for releases.
+  Assert exact filenames, both architectures, PE machine types, matching embedded/tag versions, nonempty packages, SHA-256 line for every artifact, no extra public file, and that each declared signature state matches the actual Authenticode state. Reject incomplete signing-secret pairs and mismatched signature declarations.
 
 - [x] **Step 2: Add CI in non-publishing mode and observe expected failure**
 
@@ -169,7 +170,7 @@
 
 - [x] **Step 3: Implement CI and tag-release workflows**
 
-  `native-ci.yml` builds/tests x64 and cross-builds ARM64 on pushes and pull requests. `native-release.yml` runs only for `v*` tags, validates tag syntax, requires signing secrets and signs every release executable and installer without echoing secret material, packages both architectures, aggregates all artifacts, runs the manifest gate, then creates the GitHub Release.
+  `native-ci.yml` builds/tests x64 and cross-builds ARM64 on pushes and pull requests. `native-release.yml` runs only for `v*` tags, validates tag syntax, chooses signed status when a full secret pair is present or unsigned when neither secret is configured, rejects an incomplete pair, packages both architectures, aggregates all artifacts, runs the manifest gate, then creates the GitHub Release.
 
 - [x] **Step 4: Validate with a non-publishing workflow run or local action equivalent**
 
@@ -299,5 +300,5 @@
 - Clean builds produce architecture-correct x64 and ARM64 executables, installers, portable ZIPs, and checksums.
 - Per-user install, upgrade, default uninstall, and opt-in data removal are verified.
 - GitHub tag workflows block partial or version-mismatched releases.
-- Documentation accurately covers installation, migration, privacy, recovery, mandatory signing, and the fact SmartScreen reputation may take time to establish.
+- Documentation accurately covers installation, migration, privacy, recovery, the actual signed/unsigned release status, and the fact SmartScreen reputation may take time to establish.
 - The final release gate passes without hiding unavailable real-device checks.

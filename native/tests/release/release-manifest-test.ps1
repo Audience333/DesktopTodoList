@@ -5,7 +5,8 @@ param(
   [Parameter(Mandatory)][string]$X64Installer,
   [Parameter(Mandatory)][string]$Arm64Installer,
   [Parameter(Mandatory)][string]$Version,
-  [Parameter(Mandatory)][string]$Tag
+  [Parameter(Mandatory)][string]$Tag,
+  [Parameter(Mandatory)][ValidateSet('valid', 'unsigned')][string]$SignatureStatus
 )
 
 $ErrorActionPreference = 'Stop'
@@ -42,7 +43,7 @@ function New-Fixture([string]$Directory, [bool]$ExtraFile = $false) {
     Compress-Archive -Path (Join-Path $stage '*') -DestinationPath (Join-Path $Directory $portableName)
     Remove-Item -LiteralPath $stage -Recurse -Force
   }
-  & (Join-Path $repo 'scripts\write-checksums.ps1') -ArtifactsDirectory $Directory -SignatureStatus valid | Out-Null
+  & (Join-Path $repo 'scripts\write-checksums.ps1') -ArtifactsDirectory $Directory -SignatureStatus $SignatureStatus | Out-Null
   if ($ExtraFile) { [IO.File]::WriteAllText((Join-Path $Directory 'unexpected.txt'), 'not public') }
 }
 
@@ -58,15 +59,14 @@ try {
   $valid = Join-Path $work 'valid'
   New-Fixture $valid
   & $manifestScript -ArtifactsDirectory $valid -Version $Version -Tag $Tag | Out-Null
-  Write-Host '[PASS] Complete signed x64/ARM64 release manifest'
+  Write-Host "[PASS] Complete $SignatureStatus x64/ARM64 release manifest"
 
-  $unsigned = Join-Path $work 'unsigned-status'
-  Copy-Item -LiteralPath $valid -Destination $unsigned -Recurse
-  $unsignedChecksums = Join-Path $unsigned 'checksums.txt'
-  $checksumLines = [IO.File]::ReadAllLines($unsignedChecksums)
-  $checksumLines[0] = '# Signature status: unsigned'
-  [IO.File]::WriteAllLines($unsignedChecksums, $checksumLines, [Text.UTF8Encoding]::new($false))
-  Assert-Rejected $unsigned 'an unsigned signature status'
+  $mismatchedStatus = Join-Path $work 'mismatched-status'
+  Copy-Item -LiteralPath $valid -Destination $mismatchedStatus -Recurse
+  $statusLines = [IO.File]::ReadAllLines((Join-Path $mismatchedStatus 'checksums.txt'))
+  $statusLines[0] = if ($SignatureStatus -eq 'valid') { '# Signature status: unsigned' } else { '# Signature status: valid' }
+  [IO.File]::WriteAllLines((Join-Path $mismatchedStatus 'checksums.txt'), $statusLines, [Text.UTF8Encoding]::new($false))
+  Assert-Rejected $mismatchedStatus 'a signature status that does not match the artifacts'
 
   $missing = Join-Path $work 'missing'
   Copy-Item -LiteralPath $valid -Destination $missing -Recurse

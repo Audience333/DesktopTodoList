@@ -20,7 +20,7 @@ DesktopTodoList 是 Windows 原生桌面悬浮待办小插件，不是网页，�
 - 设置可选择登录 Windows 时自动启动；默认关闭。安装程序还提供可选的桌面快捷方式；默认不创建。
 - 任务与设置保存在本机，支持 JSON 导入导出和自动备份；离线运行，不上传任务或遥测。
 
-各版本的修复与变更随 GitHub Release 发布；安装包签名与 SmartScreen 提示说明见 `docs/install.md`。
+各版本的修复与变更随 GitHub Release 发布；请查阅发布页 `checksums.txt` 中的签名状态并核对 SHA-256。v2.0.2 为未签名版本，Windows 可能显示未知发布者或 SmartScreen 警告；详细说明见 `docs/install.md`。
 
 ## 数据、隐私与迁移
 

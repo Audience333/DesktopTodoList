@@ -39,16 +39,17 @@ jobs:
           "RELEASE_VERSION=$version" >> $env:GITHUB_ENV
           "version=$version" >> $env:GITHUB_OUTPUT
 
-      - name: Require Authenticode signing secrets
+      - name: Determine release signature status
+        id: signature
         env:
           WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
           WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
         shell: pwsh
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_BASE64) -or
-              [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD)) {
-            throw 'Configure both repository Actions signing secrets before publishing.'
-          }
+          $status = ./scripts/release-signature-status.ps1
+          "RELEASE_SIGNATURE_STATUS=$status" >> $env:GITHUB_ENV
+          "status=$status" >> $env:GITHUB_OUTPUT
+          Write-Host "Selected release signature status: $status"
 
       - name: Install Inno Setup
         shell: pwsh
@@ -57,7 +58,7 @@ jobs:
             choco install innosetup --yes --no-progress
           }
 
-      - name: Verify release signing fails closed without secrets
+      - name: Verify standalone signer requires complete secrets
         shell: pwsh
         run: ./native/tests/release/signing-policy-test.ps1
 
@@ -100,13 +101,17 @@ jobs:
           if ($info.ProductVersion.Trim() -cne $env:RELEASE_VERSION) { throw "ARM64 product version mismatch: $($info.ProductVersion)" }
           Write-Host '[SKIP] Runtime execution requires an ARM64 Windows host.'
 
-      - name: Sign executable
+      - name: Sign executable when a certificate is configured
         shell: pwsh
         env:
           WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
           WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
         run: |
-          ./scripts/sign-artifact.ps1 -Path "out/build/${{ matrix.arch }}/native/Release/DesktopTodoList.exe"
+          if ($env:RELEASE_SIGNATURE_STATUS -eq 'valid') {
+            ./scripts/sign-artifact.ps1 -Path "out/build/${{ matrix.arch }}/native/Release/DesktopTodoList.exe"
+          } else {
+            Write-Host '[INFO] Publishing this release without an Authenticode signature.'
+          }
 
       - name: Build portable package
         shell: pwsh
@@ -122,13 +127,17 @@ jobs:
           -Exe "out/build/${{ matrix.arch }}/native/Release/DesktopTodoList.exe"
           -Architecture "${{ matrix.arch }}" -Version $env:RELEASE_VERSION
 
-      - name: Sign installer
+      - name: Sign installer when a certificate is configured
         shell: pwsh
         env:
           WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
           WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
         run: |
-          ./scripts/sign-artifact.ps1 -Path "out/packages/$env:RELEASE_VERSION/${{ matrix.arch }}/DesktopTodoList-${{ matrix.arch }}-Setup.exe"
+          if ($env:RELEASE_SIGNATURE_STATUS -eq 'valid') {
+            ./scripts/sign-artifact.ps1 -Path "out/packages/$env:RELEASE_VERSION/${{ matrix.arch }}/DesktopTodoList-${{ matrix.arch }}-Setup.exe"
+          } else {
+            Write-Host '[INFO] Installer remains unsigned; Windows may display a publisher or SmartScreen warning.'
+          }
 
       - name: Check x64 package contents and execution
         if: matrix.arch == 'x64'
@@ -196,6 +205,16 @@ jobs:
           $env:RELEASE_VERSION = $env:GITHUB_REF_NAME.Substring(1)
           "RELEASE_VERSION=$env:RELEASE_VERSION" >> $env:GITHUB_ENV
 
+      - name: Determine release signature status
+        env:
+          WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
+          WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+        shell: pwsh
+        run: |
+          $status = ./scripts/release-signature-status.ps1
+          "RELEASE_SIGNATURE_STATUS=$status" >> $env:GITHUB_ENV
+          Write-Host "Selected release signature status: $status"
+
       - name: Download all architecture artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -203,10 +222,10 @@ jobs:
           path: out/release-artifacts
           merge-multiple: true
 
-      - name: Verify signatures and write checksums
+      - name: Verify signature status and write checksums
         shell: pwsh
         run: |
-          ./scripts/write-checksums.ps1 -ArtifactsDirectory out/release-artifacts -SignatureStatus valid
+          ./scripts/write-checksums.ps1 -ArtifactsDirectory out/release-artifacts -SignatureStatus $env:RELEASE_SIGNATURE_STATUS
 
       - name: Run positive and negative manifest tests
         shell: pwsh
@@ -216,7 +235,8 @@ jobs:
             -Arm64Executable out/release-artifacts/DesktopTodoList-arm64.exe `
             -X64Installer out/release-artifacts/DesktopTodoList-x64-Setup.exe `
             -Arm64Installer out/release-artifacts/DesktopTodoList-arm64-Setup.exe `
-            -Version $env:RELEASE_VERSION -Tag $env:GITHUB_REF_NAME
+            -Version $env:RELEASE_VERSION -Tag $env:GITHUB_REF_NAME `
+            -SignatureStatus $env:RELEASE_SIGNATURE_STATUS
 
       - name: Require the complete release manifest
         shell: pwsh

@@ -17,7 +17,7 @@
 2. 安装程序只为当前 Windows 用户安装到 `%LOCALAPPDATA%\Programs\DesktopTodoList`，不需要管理员权限。
 3. 安装时可选是否创建桌面快捷方式；默认不勾选。完成后可从开始菜单启动。登录 Windows 自动启动默认关闭，可在应用“设置”中开启。
 
-正式发布的安装程序和应用程序均使用 Authenticode 签名，以便 Windows 验证发布者身份。新证书或下载量较少的版本仍可能暂时显示 SmartScreen 提示；签名不能保证 SmartScreen 信誉会立即建立。请确认安装包来自项目 GitHub Releases，并核对该版本发布页提供的 `checksums.txt`；不要运行来源不明的副本。
+请以该版本发布页 `checksums.txt` 的 `Signature status` 为准：`valid` 表示应用程序和安装程序通过 Authenticode 签名验证；`unsigned` 表示未签名，Windows 可能显示“未知发布者”或 SmartScreen 安全提示。本版本 v2.0.2 因未提供签名证书，按批准以未签名形式发布。即使签名有效，新证书或下载量较少的版本仍可能暂时显示 SmartScreen 提示；签名也不保证信誉立即建立。请确认文件来自项目 GitHub Releases 并核对 SHA-256 校验值；不要运行来源不明的副本。
 
 ## 便携版
 

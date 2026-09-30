@@ -13,8 +13,8 @@ Run `scripts/verify-native-release.ps1 -Version <version> -Artifacts <complete-r
 - [x] Public package/source checks find no HTML/JavaScript runtime, browser/WebView, localhost service, PowerShell dependency, or unexpected network URL.
 - [x] Documentation checks and the unique FR/NFR evidence matrix pass (79 requirement IDs).
 - [x] Historical v2.0.0 release manifest contained exactly six payload files and checksum entries; that version was explicitly `unsigned`.
-- [x] Version 2.0.1 release notes are versioned in `docs/releases/v2.0.1.md` and attached by the tag-release workflow.
-- [ ] New releases fail closed unless the x64/ARM64 executables and installers all carry valid Authenticode signatures. Configure repository Actions secrets `WINDOWS_SIGNING_CERTIFICATE_BASE64` and `WINDOWS_SIGNING_CERTIFICATE_PASSWORD` before publishing; SmartScreen reputation may still take time to establish.
+- [x] The `v2.0.1` tag's release workflow failed before publication because signing secrets were unavailable; no GitHub Release was created for that tag.
+- [x] Version 2.0.2 release notes record the approved unsigned exception and explain that Windows may show a security prompt.
 - [ ] Installer integration test confirms the desktop shortcut task is off by default, creates the shortcut when selected, and removes it on uninstall.
 
 ## Manual environment checks
@@ -27,5 +27,5 @@ The local Visual Studio installation has no usable ARM64 compiler. Genuine ARM64
 
 - [x] Review the generated gate report and all remaining `SKIP` items; 13 checks pass, none fail, and six environment checks remain explicitly skipped.
 - [ ] Confirm release tag `v<version>`, artifacts, `checksums.txt`, and GitHub release title match.
-- [ ] Verify Authenticode status and protect signing secrets; explain that signing identifies the publisher but does not guarantee immediate SmartScreen reputation.
+- [ ] Verify that the `checksums.txt` status matches every executable and installer; for `unsigned`, the release page must prominently explain the unknown-publisher/SmartScreen warning. Never print or expose signing secrets.
 - [ ] Publish only after the CI release workflow's manifest gate succeeds.
