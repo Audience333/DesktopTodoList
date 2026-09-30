@@ -16,7 +16,7 @@ function Assert-Pattern([string]$Text, [string]$Pattern, [string]$Description) {
 }
 
 Assert-Pattern $ci '(?m)^  pull_request:' 'PRs run native CI'
-Assert-Pattern $ci '(?m)^            platform: ARM64$' 'CI cross-builds ARM64'
+Assert-Pattern $ci '(?m)^\s*platform:\s*ARM64\s*$' 'CI cross-builds ARM64'
 Assert-Pattern $cmake '(?m)^set\(DESKTOP_TODO_VERSION "2\.0\.1" CACHE STRING' 'Default project version is 2.0.1'
 Assert-Pattern $ci '"-DDESKTOP_TODO_VERSION=2\.0\.1"' 'CI passes the full semantic version as one PowerShell argument'
 Assert-Pattern $ci 'workflow-config\.ps1' 'CI checks release workflow configuration'
